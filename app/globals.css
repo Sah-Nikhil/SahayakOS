@@ -196,3 +196,28 @@
     @apply font-sans;
   }
 }
+
+.leaflet-container {
+  background: var(--background);
+  font-family: var(--font-sans);
+}
+
+.leaflet-tile-pane {
+  filter: saturate(0) opacity(0.8) brightness(1.05) contrast(0.95);
+}
+
+.dark .leaflet-tile-pane {
+  filter: saturate(0) opacity(0.5) invert(1) hue-rotate(180deg) brightness(0.7) contrast(1.1);
+}
+
+.leaflet-control-attribution {
+  background: color-mix(in oklch, var(--background) 85%, transparent) !important;
+  color: var(--muted-foreground) !important;
+  border-top-left-radius: var(--radius-sm);
+  border: 1px solid color-mix(in oklch, var(--border) 75%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+.leaflet-control-attribution a {
+  color: var(--foreground) !important;
+}
