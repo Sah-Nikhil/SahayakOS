@@ -113,7 +113,7 @@ export function MultiSelect({
               <button
                 key={option.value}
                 type="button"
-                className="relative flex w-full cursor-default select-none items-center rounded-xl py-1.5 px-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+                className="relative flex w-full cursor-default select-none items-center rounded-xl py-1.5 px-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
                 onClick={() => handleSelect(option.value)}
               >
                 {option.label}
