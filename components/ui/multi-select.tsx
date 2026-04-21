@@ -60,7 +60,7 @@ export function MultiSelect({
   return (
     <div
       ref={containerRef}
-      className={cn("relative w-full", open && "z-[100]", className)}
+      className={cn("relative w-full", open && "z-100", className)}
     >
       <div
         className={cn(
@@ -107,7 +107,7 @@ export function MultiSelect({
       </div>
 
       {open && filteredOptions.length > 0 && (
-        <div className="absolute top-full z-[100] mt-2 max-h-60 w-full overflow-auto rounded-2xl border border-border bg-background/95 p-1 shadow-md backdrop-blur-sm">
+        <div className="absolute top-full z-100 mt-2 max-h-60 w-full overflow-auto rounded-2xl border border-border bg-background/95 p-1 shadow-md backdrop-blur-sm">
           <div className="flex flex-col gap-px">
             {filteredOptions.map((option) => (
               <button
