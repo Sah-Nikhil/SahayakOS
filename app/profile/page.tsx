@@ -261,7 +261,7 @@ export default function ProfilePage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-50 shadow-[6px_6px_20px] shadow-foreground/3">
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-50 focus-within:z-100 shadow-[6px_6px_20px] shadow-foreground/3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5 text-primary" />
@@ -314,7 +314,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-40 shadow-[6px_6px_20px] shadow-foreground/3">
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-40 focus-within:z-100 shadow-[6px_6px_20px] shadow-foreground/3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5 text-primary" />
@@ -359,7 +359,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-30 shadow-[6px_6px_20px] shadow-foreground/3">
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-30 focus-within:z-100 shadow-[6px_6px_20px] shadow-foreground/3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Briefcase className="h-5 w-5 text-primary" />
@@ -392,7 +392,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-20 shadow-foreground/3">
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-20 focus-within:z-100 shadow-foreground/3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CalendarClock className="h-5 w-5 text-primary" />
@@ -410,7 +410,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-10 shadow-[6px_6px_20px] shadow-foreground/3">
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-10 focus-within:z-100 shadow-[6px_6px_20px] shadow-foreground/3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-primary" />

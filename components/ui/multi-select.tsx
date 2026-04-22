@@ -11,6 +11,7 @@ export interface MultiSelectProps {
   onChange: (selected: string[]) => void
   placeholder?: string
   className?: string
+  triggerClassName?: string
 }
 
 export function MultiSelect({
@@ -19,10 +20,14 @@ export function MultiSelect({
   onChange,
   placeholder = "Select items...",
   className,
+  triggerClassName,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false)
+  const [openUpward, setOpenUpward] = React.useState(false)
+  const [maxListHeight, setMaxListHeight] = React.useState<number>(240)
   const [inputValue, setInputValue] = React.useState("")
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const inputRef = React.useRef<HTMLInputElement>(null)
 
   const handleUnselect = (item: string) => {
     onChange(selected.filter((s) => s !== item))
@@ -40,6 +45,38 @@ export function MultiSelect({
       !selected.includes(option.value) &&
       option.label.toLowerCase().includes(inputValue.toLowerCase())
   )
+
+  React.useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const updatePlacement = () => {
+      if (!containerRef.current) {
+        return
+      }
+
+      const rect = containerRef.current.getBoundingClientRect()
+      const viewportHeight = window.innerHeight
+      const margin = 12
+      const estimatedListHeight = Math.min(filteredOptions.length * 36 + 8, 320)
+      const spaceBelow = viewportHeight - rect.bottom - margin
+      const spaceAbove = rect.top - margin
+      const shouldOpenUpward =
+        spaceBelow < Math.min(estimatedListHeight, 220) && spaceAbove > spaceBelow
+      const availableHeight = shouldOpenUpward ? spaceAbove : spaceBelow
+      setOpenUpward(shouldOpenUpward)
+      setMaxListHeight(Math.max(120, Math.min(320, availableHeight)))
+    }
+
+    updatePlacement()
+    window.addEventListener("resize", updatePlacement)
+    window.addEventListener("scroll", updatePlacement, true)
+    return () => {
+      window.removeEventListener("resize", updatePlacement)
+      window.removeEventListener("scroll", updatePlacement, true)
+    }
+  }, [open, filteredOptions.length])
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -67,8 +104,12 @@ export function MultiSelect({
           "flex min-h-9 w-full flex-wrap gap-1 rounded-3xl border border-transparent bg-input/50 px-3 py-1.5 text-sm transition-[color,box-shadow,background-color]",
           "focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30",
           open && "border-ring ring-3 ring-ring/30",
+          triggerClassName,
         )}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setOpen(true)
+          inputRef.current?.focus()
+        }}
       >
         {selected.map((item) => {
           const option = options.find((o) => o.value === item)
@@ -99,6 +140,7 @@ export function MultiSelect({
           )
         })}
         <input
+          ref={inputRef}
           placeholder={selected.length === 0 ? placeholder : ""}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
@@ -108,7 +150,13 @@ export function MultiSelect({
       </div>
 
       {open && filteredOptions.length > 0 && (
-        <div className="absolute top-full z-[100] mt-2 max-h-60 w-full overflow-auto rounded-2xl border border-border bg-popover/95 p-1 shadow-md backdrop-blur-sm">
+        <div
+          className={cn(
+            "absolute z-[100] w-full overflow-auto rounded-2xl border border-border bg-popover/95 p-1 shadow-md backdrop-blur-sm",
+            openUpward ? "bottom-full mb-2" : "top-full mt-2",
+          )}
+          style={{ maxHeight: maxListHeight }}
+        >
           <div className="flex flex-col gap-px">
             {filteredOptions.map((option) => (
               <button

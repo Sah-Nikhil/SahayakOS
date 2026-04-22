@@ -143,7 +143,7 @@ function SlotRow({
   isOnlySlot: boolean
 }) {
   return (
-    <div className="flex items-center gap-3 flex-wrap">
+    <div className="flex items-center gap-3 flex-wrap relative focus-within:z-10">
       {/* Time range */}
       <div className="flex items-center gap-2">
         <TimeInput value={slot.start} onChange={onChangeStart} />
@@ -351,7 +351,7 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
               .map((dayHours) => (
                 <div
                   key={dayHours.day}
-                  className="grid grid-cols-[120px_1fr] gap-4 items-center"
+                  className="grid grid-cols-[120px_1fr] gap-4 items-center relative focus-within:z-10"
                 >
                   <span className="text-sm font-bold text-foreground">
                     {DAY_LABELS[dayHours.day]}
@@ -417,7 +417,7 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
                 return (
                   <div
                     key={dayAvail.day}
-                    className="grid grid-cols-[120px_1fr] gap-4 items-start"
+                    className="grid grid-cols-[120px_1fr] gap-4 items-start relative focus-within:z-10"
                   >
                     <span className="text-sm font-bold text-foreground pt-1.5">
                       {DAY_LABELS[dayAvail.day]}

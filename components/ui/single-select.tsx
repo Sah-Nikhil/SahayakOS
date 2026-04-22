@@ -36,6 +36,8 @@ export function SingleSelect({
   ariaLabel,
 }: SingleSelectProps) {
   const [open, setOpen] = React.useState(false)
+  const [openUpward, setOpenUpward] = React.useState(false)
+  const [maxListHeight, setMaxListHeight] = React.useState<number>(240)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const selectedOption = React.useMemo(
     () => options.find((option) => option.value === value),
@@ -58,15 +60,41 @@ export function SingleSelect({
       return
     }
 
+    const updatePlacement = () => {
+      if (!containerRef.current) {
+        return
+      }
+
+      const rect = containerRef.current.getBoundingClientRect()
+      const viewportHeight = window.innerHeight
+      const margin = 12
+      const estimatedListHeight = Math.min(options.length * 36 + 8, 320)
+      const spaceBelow = viewportHeight - rect.bottom - margin
+      const spaceAbove = rect.top - margin
+      const shouldOpenUpward =
+        spaceBelow < Math.min(estimatedListHeight, 220) && spaceAbove > spaceBelow
+      const availableHeight = shouldOpenUpward ? spaceAbove : spaceBelow
+      setOpenUpward(shouldOpenUpward)
+      setMaxListHeight(Math.max(120, Math.min(320, availableHeight)))
+    }
+
+    updatePlacement()
+
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpen(false)
       }
     }
 
+    window.addEventListener("resize", updatePlacement)
+    window.addEventListener("scroll", updatePlacement, true)
     document.addEventListener("keydown", handleEscape)
-    return () => document.removeEventListener("keydown", handleEscape)
-  }, [open])
+    return () => {
+      window.removeEventListener("resize", updatePlacement)
+      window.removeEventListener("scroll", updatePlacement, true)
+      document.removeEventListener("keydown", handleEscape)
+    }
+  }, [open, options.length])
 
   return (
     <div ref={containerRef} className={cn("relative w-full", open && "z-[100]", className)}>
@@ -93,9 +121,11 @@ export function SingleSelect({
       {open && options.length > 0 ? (
         <div
           className={cn(
-            "absolute top-full z-[100] mt-2 max-h-60 w-full overflow-auto rounded-2xl border border-border bg-popover/95 p-1 shadow-md backdrop-blur-sm",
+            "absolute z-[100] w-full overflow-auto rounded-2xl border border-border bg-popover/95 p-1 shadow-md backdrop-blur-sm",
+            openUpward ? "bottom-full mb-2" : "top-full mt-2",
             contentClassName,
           )}
+          style={{ maxHeight: maxListHeight }}
           role="listbox"
         >
           <div className="flex flex-col gap-px">
