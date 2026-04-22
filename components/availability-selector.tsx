@@ -67,11 +67,12 @@ const DAY_SHORT: Record<DayKey, string> = {
 }
 
 const DEFAULT_SLOT: TimeSlot = { start: "09:00", end: "17:00" }
-const TIME_OPTIONS = Array.from({ length: 24 * 60 }, (_, index) => {
-  const hour = Math.floor(index / 60)
-  const minute = index % 60
+const TIME_OPTIONS = Array.from({ length: 24 * 2 }, (_, index) => {
+  const totalMinutes = index * 30
+  const hour = Math.floor(totalMinutes / 60)
+  const minute = totalMinutes % 60
   const hourLabel = ((hour + 11) % 12) + 1
-  const minuteLabel = minute === 0 ? "00" : "30"
+  const minuteLabel = String(minute).padStart(2, "0")
   const period = hour < 12 ? "AM" : "PM"
 
   return {
