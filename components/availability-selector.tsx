@@ -171,7 +171,7 @@ function SlotRow({
         <button
           type="button"
           onClick={onCopyToAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary border border-primary/20 bg-primary/5 hover:bg-primary hover:text-white hover:border-primary transition-colors ml-auto"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary border border-primary/20 bg-primary/5 hover:bg-primary hover:text-white hover:border-primary transition-colors"
         >
           <Copy className="h-3 w-3" />
           Apply to all
@@ -322,7 +322,7 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
                 type="button"
                 onClick={() => handleDayToggle(d.day, "hours")}
                 className={cn(
-                  "h-8 w-10 rounded-lg text-xs font-bold transition-all duration-200",
+                  "h-9 w-9 rounded-lg text-xs font-bold transition-all duration-200",
                   d.enabled
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground border border-border/50",
@@ -386,7 +386,7 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
                 type="button"
                 onClick={() => handleDayToggle(d.day, "slots")}
                 className={cn(
-                  "h-8 w-10 rounded-lg text-xs font-bold transition-all duration-200",
+                  "h-9 w-9 rounded-lg text-xs font-bold transition-all duration-200",
                   d.enabled
                     ? "bg-primary text-primary-foreground shadow-sm"
                     : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground border border-border/50",
