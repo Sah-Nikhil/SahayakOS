@@ -44,4 +44,4 @@ next-env.d.ts
 # Agents
 /.agents/
 /.claude/
-/.convex/generated/
+/convex/_generated/
