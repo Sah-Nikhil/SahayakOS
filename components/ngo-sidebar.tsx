@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronRight, HelpCircle, MapPin, Search } from "lucide-react";
 
-export type StartupSidebarCompany = {
+export type NGOSidebarCompany = {
   id: string;
   name: string;
   location: string;
@@ -16,12 +16,12 @@ export type StartupSidebarCompany = {
   logoClassName?: string;
 };
 
-type StartupsSidebarProps = {
+type NGOSidebarProps = {
   className?: string;
-  companies?: StartupSidebarCompany[];
+  companies?: NGOSidebarCompany[];
 };
 
-const MOCK_COMPANIES: StartupSidebarCompany[] = [
+const MOCK_COMPANIES: NGOSidebarCompany[] = [
   {
     id: "1mg",
     name: "1MG",
@@ -74,7 +74,7 @@ const MOCK_COMPANIES: StartupSidebarCompany[] = [
   },
 ];
 
-export function StartupsSidebar({ className, companies = MOCK_COMPANIES }: StartupsSidebarProps) {
+export function NGOSidebar({ className, companies = MOCK_COMPANIES }: NGOSidebarProps) {
   return (
     <aside
       className={cn(
@@ -84,8 +84,8 @@ export function StartupsSidebar({ className, companies = MOCK_COMPANIES }: Start
     >
       <div className="flex items-start justify-between px-5 pb-3 pt-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight text-foreground">Startups in Delhi</h2>
-          <p className="mt-1.5 text-sm text-muted-foreground">Tap a company to view details</p>
+          <h2 className="text-3xl font-bold tracking-tight text-foreground">NGOs in Delhi</h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">Tap a NGO to view details</p>
         </div>
         <button
           type="button"

@@ -5,7 +5,7 @@ import { CityMap } from "@/components/city-map";
 import type { CityMapConfig } from "@/lib/city-maps";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Button } from "@/components/ui/button";
-import { StartupsSidebar } from "@/components/startups-sidebar";
+import { NGOSidebar } from "@/components/ngo-sidebar";
 
 type CityMapDashboardProps = {
   cities: CityMapConfig[];
@@ -22,11 +22,10 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
 
   return (
     <main className="flex h-screen w-full bg-background">
-      <StartupsSidebar className="hidden xl:flex" />
       <section className="relative h-full flex-1 overflow-hidden">
         {selectedCity ? (
           <>
-            <div className="absolute left-6 top-6 z-[600]">
+            <div className="absolute left-6 top-6 z-600">
               <ButtonGroup className="rounded-full shadow-sm bg-background/90 backdrop-blur-sm border-border p-1">
                 {cities.map((city) => (
                   <Button
@@ -34,8 +33,8 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
                     variant={city.name === selectedCityName ? "default" : "ghost"}
                     onClick={() => setSelectedCityName(city.name)}
                     className={`rounded-full px-5 text-sm font-medium transition-all ${
-                      city.name === selectedCityName 
-                        ? 'bg-primary text-primary-foreground shadow-sm' 
+                      city.name === selectedCityName
+                        ? 'bg-primary text-primary-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
@@ -62,6 +61,7 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
           </section>
         )}
       </section>
+      <NGOSidebar className="hidden xl:flex" />
     </main>
   );
 }
