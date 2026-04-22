@@ -1,4 +1,12 @@
+"use client"
+
+import * as React from "react"
+import { useRouter } from "next/navigation"
+import { useConvex } from "convex/react"
+
+import { api } from "@/convex/_generated/api"
 import { cn } from "@/lib/utils"
+import { setVolunteerSession } from "@/lib/volunteer-session"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -14,11 +22,53 @@ export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const router = useRouter()
+  const convex = useConvex()
+  const [email, setEmail] = React.useState("")
+  const [password, setPassword] = React.useState("")
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError(null)
+
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail || !password.trim()) {
+      setError("Please enter your email and password.")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const volunteer = await convex.query(api.volunteers.getVolunteerByEmail, {
+        email: normalizedEmail,
+      })
+
+      if (!volunteer) {
+        setIsSubmitting(false)
+        setError("No volunteer profile found for this email. Please sign up first.")
+        return
+      }
+
+      setVolunteerSession({
+        volunteerId: volunteer._id,
+        email: volunteer.contactDetails.email,
+        name: volunteer.name,
+        phone: volunteer.contactDetails.phone,
+      })
+      router.push("/profile")
+    } catch (error) {
+      setIsSubmitting(false)
+      setError(error instanceof Error ? error.message : "Unable to login right now.")
+    }
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden p-0">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8">
+          <form className="p-6 md:p-8" onSubmit={handleSubmit}>
             <FieldGroup>
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-bold">Welcome to SahayakOS</h1>
@@ -32,6 +82,8 @@ export function LoginForm({
                   id="email"
                   type="email"
                   placeholder="m@example.com"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   required
                 />
               </Field>
@@ -46,13 +98,22 @@ export function LoginForm({
                     Forgot your password?
                   </a>
                 </div>
-                <Input id="password" type="password" required />
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
               </Field>
               {/* Login Button */}
               <Field>
-                <Button type="submit">Login</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Logging in..." : "Login"}
+                </Button>
               </Field>
-              
+              {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
+
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
                 Or continue with
               </FieldSeparator>

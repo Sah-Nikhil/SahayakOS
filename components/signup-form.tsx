@@ -1,4 +1,12 @@
+"use client"
+
+import * as React from "react"
+import { useRouter } from "next/navigation"
+import { useConvex } from "convex/react"
+
+import { api } from "@/convex/_generated/api"
 import { cn } from "@/lib/utils"
+import { setVolunteerSession } from "@/lib/volunteer-session"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -14,11 +22,63 @@ export function SignupForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const router = useRouter()
+  const convex = useConvex()
+  const [name, setName] = React.useState("")
+  const [email, setEmail] = React.useState("")
+  const [phone, setPhone] = React.useState("")
+  const [password, setPassword] = React.useState("")
+  const [confirmPassword, setConfirmPassword] = React.useState("")
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError(null)
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const normalizedPhone = phone.replace(/\D/g, "").slice(0, 10)
+
+    if (!name.trim() || !normalizedEmail || !normalizedPhone || !password || !confirmPassword) {
+      setError("Please fill in all fields before continuing.")
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const existingVolunteer = await convex.query(api.volunteers.getVolunteerByEmail, {
+        email: normalizedEmail,
+      })
+
+      if (existingVolunteer) {
+        setIsSubmitting(false)
+        setError("An account with this email already exists. Please login.")
+        return
+      }
+
+      setVolunteerSession({
+        email: normalizedEmail,
+        name: name.trim(),
+        phone: normalizedPhone,
+      })
+
+      router.push("/profile")
+    } catch (error) {
+      setIsSubmitting(false)
+      setError(error instanceof Error ? error.message : "Unable to continue right now.")
+    }
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card className="overflow-hidden p-0">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8">
+          <form className="p-6 md:p-8" onSubmit={handleSubmit}>
             <FieldGroup>
               <div className="flex flex-col items-center gap-2 text-center">
                 <h1 className="text-2xl font-bold">Welcome to SahayakOS</h1>
@@ -29,14 +89,14 @@ export function SignupForm({
               <Field>
                 <div className="flex items-center">
                   <FieldLabel htmlFor="name">Name</FieldLabel>
-                  {/* <a
-                    href="/pwreset"
-                    className="ml-auto text-sm underline-offset-2 hover:underline"
-                  >
-                    Forgot your password?
-                  </a> */}
                 </div>
-                <Input id="name" type="text" required />
+                <Input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                />
               </Field>
               {/* Email */}
               <Field>
@@ -45,6 +105,8 @@ export function SignupForm({
                   id="email"
                   type="email"
                   placeholder="m@example.com"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                   required
                 />
               </Field>
@@ -59,7 +121,13 @@ export function SignupForm({
                     Forgot your password?
                   </a> */}
                 </div>
-                <Input id="phone" type="tel" required />
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                  required
+                />
               </Field>
               <div className="grid grid-cols-2 gap-4">
                 {/* Password */}
@@ -73,7 +141,13 @@ export function SignupForm({
                     Forgot your password?
                   </a> */}
                 </div>
-                <Input id="password" type="password" required />
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
               </Field>
               {/* Confirm Password */}
               <Field>
@@ -86,12 +160,21 @@ export function SignupForm({
                     Forgot your password?
                   </a> */}
                 </div>
-                <Input id="confirm-password" type="password" required />
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  required
+                />
               </Field>
               </div>
               <Field>
-                <Button type="submit">Sign Up</Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? "Continuing..." : "Sign Up"}
+                </Button>
               </Field>
+              {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
                 Or continue with
               </FieldSeparator>
