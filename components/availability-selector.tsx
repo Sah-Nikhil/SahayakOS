@@ -23,9 +23,15 @@ export type DayAvailability = {
   slots: TimeSlot[]
 }
 
+export type DayHours = {
+  day: DayKey
+  enabled: boolean
+  hours: number
+}
+
 export type AvailabilityValue =
   | { mode: "slots"; days: DayAvailability[] }
-  | { mode: "hours"; totalHoursPerWeek: number }
+  | { mode: "hours"; days: DayHours[] }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -66,6 +72,14 @@ export function defaultSlotsAvailability(): DayAvailability[] {
     day,
     enabled: day !== "sunday" && day !== "saturday",
     slots: [{ ...DEFAULT_SLOT }],
+  }))
+}
+
+export function defaultHoursAvailability(): DayHours[] {
+  return DAY_ORDER.map((day) => ({
+    day,
+    enabled: day !== "sunday" && day !== "saturday",
+    hours: 8,
   }))
 }
 
@@ -202,28 +216,41 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
   }
 
   const isSlots = value.mode === "slots"
-  const days = isSlots ? value.days : defaultSlotsAvailability()
-  const totalHours = !isSlots && value.mode === "hours" ? value.totalHoursPerWeek : 40
+  const slotDays = isSlots ? value.days : defaultSlotsAvailability()
+  const hourDays = !isSlots && value.mode === "hours" ? value.days : defaultHoursAvailability()
 
   const handleModeChange = (newMode: "slots" | "hours") => {
     if (newMode === "slots") {
       onChange({ mode: "slots", days: defaultSlotsAvailability() })
     } else {
-      onChange({ mode: "hours", totalHoursPerWeek: 40 })
+      onChange({ mode: "hours", days: defaultHoursAvailability() })
     }
   }
 
-  const handleDayToggle = (dayKey: DayKey) => {
-    if (!isSlots) return
-    const updated = days.map((d) =>
-      d.day === dayKey ? { ...d, enabled: !d.enabled } : d,
+  const handleDayToggle = (dayKey: DayKey, mode: "slots" | "hours") => {
+    if (mode === "slots") {
+      const updated = slotDays.map((d) =>
+        d.day === dayKey ? { ...d, enabled: !d.enabled } : d,
+      )
+      onChange({ mode: "slots", days: updated })
+    } else {
+      const updated = hourDays.map((d) =>
+        d.day === dayKey ? { ...d, enabled: !d.enabled } : d,
+      )
+      onChange({ mode: "hours", days: updated })
+    }
+  }
+
+  const updateHours = (dayKey: DayKey, val: number) => {
+    const updated = hourDays.map((d) =>
+      d.day === dayKey ? { ...d, hours: val } : d,
     )
-    onChange({ mode: "slots", days: updated })
+    onChange({ mode: "hours", days: updated })
   }
 
   const updateSlot = (dayKey: DayKey, slotIndex: number, field: "start" | "end", val: string) => {
     if (!isSlots) return
-    const updated = days.map((d) => {
+    const updated = slotDays.map((d) => {
       if (d.day !== dayKey) return d
       const newSlots = d.slots.map((s, i) =>
         i === slotIndex ? { ...s, [field]: val } : s,
@@ -235,7 +262,7 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
 
   const addSlot = (dayKey: DayKey) => {
     if (!isSlots) return
-    const updated = days.map((d) => {
+    const updated = slotDays.map((d) => {
       if (d.day !== dayKey) return d
       const lastSlot = d.slots[d.slots.length - 1]
       return { ...d, slots: [...d.slots, { ...lastSlot }] }
@@ -245,7 +272,7 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
 
   const removeSlot = (dayKey: DayKey, slotIndex: number) => {
     if (!isSlots) return
-    const updated = days.map((d) => {
+    const updated = slotDays.map((d) => {
       if (d.day !== dayKey) return d
       if (d.slots.length <= 1) return d
       return { ...d, slots: d.slots.filter((_, i) => i !== slotIndex) }
@@ -253,11 +280,11 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
     onChange({ mode: "slots", days: updated })
   }
 
-  const firstEnabledDay = days.find((d) => d.enabled) ?? null
+  const firstEnabledSlotDay = slotDays.find((d) => d.enabled) ?? null
 
   const handleCopyToAll = (sourceDay: DayAvailability) => {
     if (!isSlots) return
-    const updated = days.map((d) =>
+    const updated = slotDays.map((d) =>
       d.enabled ? { ...d, slots: sourceDay.slots.map((s) => ({ ...s })) } : d,
     )
     onChange({ mode: "slots", days: updated })
@@ -290,31 +317,66 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
       </div>
 
       {!isSlots && (
-        <div className="p-8 rounded-[32px] bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/10 animate-in zoom-in-95 duration-500">
-          <div className="flex flex-col items-center text-center space-y-6">
-            <div className="w-16 h-16 rounded-[24px] bg-background flex items-center justify-center shadow-xl shadow-primary/10">
-              <Clock className="h-8 w-8 text-primary" strokeWidth={2.5} />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-2xl font-black tracking-tight">How many hours?</h3>
-              <p className="text-muted-foreground font-medium">Set your total weekly volunteer capacity.</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <input
-                type="number"
-                min={1}
-                max={168}
-                value={totalHours}
-                onChange={(e) => onChange({ mode: "hours", totalHoursPerWeek: Number(e.target.value) })}
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          {/* Day Selector Bubbles */}
+          <div className="flex gap-3 flex-wrap justify-center sm:justify-start">
+            {hourDays.map((d) => (
+              <button
+                key={d.day}
+                type="button"
+                onClick={() => handleDayToggle(d.day, "hours")}
                 className={cn(
-                  "h-20 w-32 rounded-[28px] border-2 border-primary/20 bg-background px-4",
-                  "text-4xl font-black text-primary tabular-nums text-center shadow-2xl shadow-primary/5",
-                  "focus:outline-none focus:ring-8 focus:ring-primary/5 focus:border-primary transition-all duration-500",
+                  "h-14 w-14 rounded-2xl text-sm font-black transition-all duration-500 active:scale-90",
+                  d.enabled
+                    ? "bg-primary text-white shadow-2xl shadow-primary/40 rotate-3"
+                    : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground -rotate-3",
                 )}
-              />
-              <span className="text-xl font-bold text-muted-foreground">hrs / week</span>
-            </div>
+              >
+                {DAY_SHORT[d.day]}
+              </button>
+            ))}
           </div>
+
+          {/* Hours-per-day list */}
+          <div className="space-y-4">
+            {hourDays
+              .filter((d) => d.enabled)
+              .map((dayHours) => (
+                <div key={dayHours.day} className="p-6 rounded-[32px] bg-background border border-border/50 shadow-sm hover:shadow-xl hover:border-primary/20 transition-all duration-500">
+                  <div className="flex flex-col md:flex-row md:items-center gap-6">
+                    <div className="w-40 shrink-0">
+                      <div className="inline-flex px-4 py-2 rounded-full bg-primary/5 text-primary text-sm font-black uppercase tracking-widest mb-1">
+                        {DAY_LABELS[dayHours.day]}
+                      </div>
+                      <p className="text-xs text-muted-foreground font-semibold px-1">Hours to work</p>
+                    </div>
+                    <div className="flex items-center gap-4 bg-primary/5 p-2 rounded-[22px] border border-primary/10 shadow-sm">
+                      <input
+                        type="number"
+                        min={1}
+                        max={24}
+                        value={dayHours.hours}
+                        onChange={(e) => updateHours(dayHours.day, Math.min(24, Math.max(1, Number(e.target.value))))}
+                        className={cn(
+                          "h-14 w-24 rounded-2xl border-2 border-border/50 bg-background px-4",
+                          "text-2xl font-black text-primary tabular-nums text-center shadow-sm",
+                          "focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all duration-300",
+                        )}
+                      />
+                      <span className="text-base font-bold text-primary/60 pr-2">hrs</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+          </div>
+
+          {hourDays.every((d) => !d.enabled) && (
+            <div className="py-20 text-center rounded-[40px] border-2 border-dashed border-border/50 bg-muted/20">
+              <CalendarDays className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
+              <p className="text-lg font-bold text-muted-foreground">Select days to set your hours</p>
+              <p className="text-sm text-muted-foreground/60">Your schedule will appear here.</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -322,11 +384,11 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
           {/* Day Selector Bubbles */}
           <div className="flex gap-3 flex-wrap justify-center sm:justify-start">
-            {days.map((d) => (
+            {slotDays.map((d) => (
               <button
                 key={d.day}
                 type="button"
-                onClick={() => handleDayToggle(d.day)}
+                onClick={() => handleDayToggle(d.day, "slots")}
                 className={cn(
                   "h-14 w-14 rounded-2xl text-sm font-black transition-all duration-500 active:scale-90",
                   d.enabled
@@ -341,10 +403,10 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
 
           {/* Schedule List */}
           <div className="space-y-4">
-            {days
+            {slotDays
               .filter((d) => d.enabled)
               .map((dayAvail) => {
-                const isTopDay = firstEnabledDay?.day === dayAvail.day
+                const isTopDay = firstEnabledSlotDay?.day === dayAvail.day
                 return (
                   <div key={dayAvail.day} className="p-6 rounded-[32px] bg-background border border-border/50 shadow-sm hover:shadow-xl hover:border-primary/20 transition-all duration-500 group/day">
                     <div className="flex flex-col md:flex-row md:items-start gap-6">
@@ -375,7 +437,7 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
               })}
           </div>
 
-          {days.every((d) => !d.enabled) && (
+          {slotDays.every((d) => !d.enabled) && (
             <div className="py-20 text-center rounded-[40px] border-2 border-dashed border-border/50 bg-muted/20">
               <CalendarDays className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
               <p className="text-lg font-bold text-muted-foreground">Select days to build your schedule</p>

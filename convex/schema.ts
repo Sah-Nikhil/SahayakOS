@@ -48,7 +48,13 @@ export const availabilityValidator = v.union(
   }),
   v.object({
     mode: v.literal("hours"),
-    totalHoursPerWeek: v.number(),
+    days: v.array(
+      v.object({
+        day: dayOfWeekValidator,
+        enabled: v.boolean(),
+        hours: v.number(),
+      })
+    ),
   }),
 );
 
