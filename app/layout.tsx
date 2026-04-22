@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { ConvexClientProvider } from "./convex-provider";
+import { Analytics } from "@vercel/analytics/next"
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -35,6 +36,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <ConvexClientProvider>{children}</ConvexClientProvider>
       </body>
+      <Analytics />
     </html>
   );
 }
