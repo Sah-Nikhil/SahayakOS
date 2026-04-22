@@ -152,22 +152,27 @@ export function MultiSelect({
       {open && filteredOptions.length > 0 && (
         <div
           className={cn(
-            "absolute z-[100] w-full overflow-auto rounded-2xl border border-border bg-popover/95 p-1 shadow-md backdrop-blur-sm",
+            "absolute z-[100] w-full rounded-2xl border border-border bg-popover/95 shadow-md backdrop-blur-sm overflow-hidden",
             openUpward ? "bottom-full mb-2" : "top-full mt-2",
           )}
-          style={{ maxHeight: maxListHeight }}
+          role="listbox"
         >
-          <div className="flex flex-col gap-px">
-            {filteredOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className="relative flex w-full cursor-default select-none items-center rounded-xl px-2.5 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
-                onClick={() => handleSelect(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
+          <div
+            className="overflow-y-auto px-1 pt-1 pb-1.5 [scroll-padding-block:0.25rem]"
+            style={{ maxHeight: maxListHeight }}
+          >
+            <div className="flex flex-col gap-px">
+              {filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className="relative flex w-full cursor-default select-none items-center rounded-xl px-2.5 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50"
+                  onClick={() => handleSelect(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -121,38 +121,42 @@ export function SingleSelect({
       {open && options.length > 0 ? (
         <div
           className={cn(
-            "absolute z-[100] w-full overflow-auto rounded-2xl border border-border bg-popover/95 p-1 shadow-md backdrop-blur-sm",
+            "absolute z-[100] w-full rounded-2xl border border-border bg-popover/95 shadow-md backdrop-blur-sm overflow-hidden",
             openUpward ? "bottom-full mb-2" : "top-full mt-2",
             contentClassName,
           )}
-          style={{ maxHeight: maxListHeight }}
           role="listbox"
         >
-          <div className="flex flex-col gap-px">
-            {options.map((option) => {
-              const isSelected = option.value === value
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => {
-                    onChange(option.value)
-                    setOpen(false)
-                  }}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-sm transition-colors outline-none",
-                    isSelected
-                      ? "bg-primary text-primary-foreground"
-                      : "text-foreground hover:bg-accent hover:text-accent-foreground",
-                  )}
-                >
-                  <span>{option.label}</span>
-                  {isSelected ? <Check className="h-4 w-4" /> : null}
-                </button>
-              )
-            })}
+          <div
+            className="overflow-y-auto px-1 pt-1 pb-1.5 [scroll-padding-block:0.25rem]"
+            style={{ maxHeight: maxListHeight }}
+          >
+            <div className="flex flex-col gap-px">
+              {options.map((option) => {
+                const isSelected = option.value === value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    onClick={() => {
+                      onChange(option.value)
+                      setOpen(false)
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left text-sm transition-colors outline-none",
+                      isSelected
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-accent hover:text-accent-foreground",
+                    )}
+                  >
+                    <span>{option.label}</span>
+                    {isSelected ? <Check className="h-4 w-4" /> : null}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         </div>
       ) : null}
