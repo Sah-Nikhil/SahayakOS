@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import {
   User,
   Mail,
@@ -125,12 +126,12 @@ const toFormData = (volunteer: Doc<"volunteers">): FormData => ({
 })
 
 export default function ProfilePage() {
+  const router = useRouter()
   const createVolunteer = useMutation(api.volunteers.createVolunteer)
   const updateVolunteer = useMutation(api.volunteers.updateVolunteer)
   const [volunteerId, setVolunteerId] = React.useState<Id<"volunteers"> | null>(null)
   const [formData, setFormData] = React.useState<FormData>(defaultFormData)
   const [isSaving, setIsSaving] = React.useState(false)
-  const [statusMessage, setStatusMessage] = React.useState<string | null>(null)
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
 
   const volunteer = useQuery(
@@ -140,16 +141,20 @@ export default function ProfilePage() {
 
   React.useEffect(() => {
     const session = getVolunteerSession()
-    setFormData((prev) => ({
-      ...prev,
-      name: session.name ?? prev.name,
-      email: session.email ?? prev.email,
-      phone: session.phone ?? prev.phone,
-    }))
+    const timeoutId = window.setTimeout(() => {
+      setFormData((prev) => ({
+        ...prev,
+        name: session.name ?? prev.name,
+        email: session.email ?? prev.email,
+        phone: session.phone ?? prev.phone,
+      }))
 
-    if (session.volunteerId) {
-      setVolunteerId(session.volunteerId as Id<"volunteers">)
-    }
+      if (session.volunteerId) {
+        setVolunteerId(session.volunteerId as Id<"volunteers">)
+      }
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [])
 
   React.useEffect(() => {
@@ -157,13 +162,17 @@ export default function ProfilePage() {
       return
     }
 
-    setFormData(toFormData(volunteer))
-    setVolunteerSession({
-      volunteerId: volunteer._id,
-      email: volunteer.contactDetails.email,
-      name: volunteer.name,
-      phone: volunteer.contactDetails.phone,
-    })
+    const timeoutId = window.setTimeout(() => {
+      setFormData(toFormData(volunteer))
+      setVolunteerSession({
+        volunteerId: volunteer._id,
+        email: volunteer.contactDetails.email,
+        name: volunteer.name,
+        phone: volunteer.contactDetails.phone,
+      })
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [volunteer])
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -186,7 +195,6 @@ export default function ProfilePage() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     setErrorMessage(null)
-    setStatusMessage(null)
 
     const age = Number(formData.age)
 
@@ -241,8 +249,8 @@ export default function ProfilePage() {
         })
       }
 
-      setStatusMessage("Profile saved successfully.")
       setIsSaving(false)
+      router.replace("/")
     } catch (error) {
       setIsSaving(false)
       setErrorMessage(error instanceof Error ? error.message : "Unable to save profile right now.")
@@ -256,8 +264,19 @@ export default function ProfilePage() {
         <p className="text-lg text-muted-foreground mx-auto max-w-2xl">
           Help us match you with the best opportunities by telling us about yourself.
         </p>
-        {statusMessage ? <p className="text-sm text-emerald-600">{statusMessage}</p> : null}
         {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
+      </div>
+
+      <div className="mb-6 flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/40 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-1">
+          <p className="font-medium text-foreground">Want to browse the main map now?</p>
+          <p className="text-sm text-muted-foreground">
+            You can jump to the main map/job listing page at any time.
+          </p>
+        </div>
+        <Button type="button" variant="outline" onClick={() => router.push("/")}>
+          Go to main map
+        </Button>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -399,7 +418,7 @@ export default function ProfilePage() {
               Availability
             </CardTitle>
             <CardDescription>
-              Set when you're available to volunteer each week.
+              Set when you&apos;re available to volunteer each week.
             </CardDescription>
           </CardHeader>
           <CardContent>
