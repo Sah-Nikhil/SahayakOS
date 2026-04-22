@@ -171,9 +171,9 @@ function SlotRow({
         <button
           type="button"
           onClick={onCopyToAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary border border-primary/20 bg-primary/5 hover:bg-primary hover:text-white hover:border-primary transition-colors"
+          className="group/copy flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary border border-primary/20 bg-primary/5 hover:bg-primary hover:text-white hover:border-primary transition-all duration-500 hover:shadow-lg hover:shadow-primary/30 active:scale-95 ml-auto md:ml-0"
         >
-          <Copy className="h-3 w-3" />
+          <Copy className="h-3 w-3 transition-transform group-hover/copy:rotate-12" />
           Apply to all
         </button>
       )}
@@ -334,15 +334,15 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
           </div>
 
           {/* Hours rows */}
-          <div className="space-y-2">
+          <div className="space-y-5 py-2">
             {hourDays
               .filter((d) => d.enabled)
               .map((dayHours) => (
                 <div
                   key={dayHours.day}
-                  className="flex items-center gap-4 px-4 py-3 rounded-xl border border-border/50 bg-background hover:border-primary/20 transition-colors"
+                  className="grid grid-cols-[120px_1fr] gap-4 items-center"
                 >
-                  <span className="w-28 shrink-0 text-xs font-semibold text-primary uppercase tracking-wider">
+                  <span className="text-sm font-bold text-foreground">
                     {DAY_LABELS[dayHours.day]}
                   </span>
                   <div className="flex items-center gap-2">
@@ -398,7 +398,7 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
           </div>
 
           {/* Slot rows */}
-          <div className="space-y-2">
+          <div className="space-y-6 py-2">
             {slotDays
               .filter((d) => d.enabled)
               .map((dayAvail) => {
@@ -406,27 +406,25 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
                 return (
                   <div
                     key={dayAvail.day}
-                    className="px-4 py-3 rounded-xl border border-border/50 bg-background hover:border-primary/20 transition-colors"
+                    className="grid grid-cols-[120px_1fr] gap-4 items-start"
                   >
-                    <div className="flex flex-col gap-2.5">
-                      <span className="text-xs font-semibold text-primary uppercase tracking-wider">
-                        {DAY_LABELS[dayAvail.day]}
-                      </span>
-                      <div className="space-y-2">
-                        {dayAvail.slots.map((slot, si) => (
-                          <SlotRow
-                            key={si}
-                            slot={slot}
-                            onChangeStart={(v) => updateSlot(dayAvail.day, si, "start", v)}
-                            onChangeEnd={(v) => updateSlot(dayAvail.day, si, "end", v)}
-                            onAdd={() => addSlot(dayAvail.day)}
-                            onRemove={() => removeSlot(dayAvail.day, si)}
-                            isOnlySlot={dayAvail.slots.length === 1}
-                            showCopyToAll={isTopDay && si === dayAvail.slots.length - 1}
-                            onCopyToAll={() => handleCopyToAll(dayAvail)}
-                          />
-                        ))}
-                      </div>
+                    <span className="text-sm font-bold text-foreground pt-1.5">
+                      {DAY_LABELS[dayAvail.day]}
+                    </span>
+                    <div className="space-y-3">
+                      {dayAvail.slots.map((slot, si) => (
+                        <SlotRow
+                          key={si}
+                          slot={slot}
+                          onChangeStart={(v) => updateSlot(dayAvail.day, si, "start", v)}
+                          onChangeEnd={(v) => updateSlot(dayAvail.day, si, "end", v)}
+                          onAdd={() => addSlot(dayAvail.day)}
+                          onRemove={() => removeSlot(dayAvail.day, si)}
+                          isOnlySlot={dayAvail.slots.length === 1}
+                          showCopyToAll={isTopDay && si === dayAvail.slots.length - 1}
+                          onCopyToAll={() => handleCopyToAll(dayAvail)}
+                        />
+                      ))}
                     </div>
                   </div>
                 )
