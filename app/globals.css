@@ -221,3 +221,37 @@
 .leaflet-control-attribution a {
   color: var(--foreground) !important;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes ngo-pane-enter-right {
+    from {
+      opacity: 0;
+      transform: translateX(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes ngo-pane-enter-left {
+    from {
+      opacity: 0;
+      transform: translateX(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .ngo-pane-enter-right {
+    animation: ngo-pane-enter-right 220ms ease-out both;
+    will-change: opacity, transform;
+  }
+
+  .ngo-pane-enter-left {
+    animation: ngo-pane-enter-left 220ms ease-out both;
+    will-change: opacity, transform;
+  }
+}
