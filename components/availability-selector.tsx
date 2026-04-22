@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Plus, Minus, Copy, CalendarDays } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { SingleSelect } from "@/components/ui/single-select"
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,18 @@ const DAY_SHORT: Record<DayKey, string> = {
 }
 
 const DEFAULT_SLOT: TimeSlot = { start: "09:00", end: "17:00" }
+const TIME_OPTIONS = Array.from({ length: 24 * 60 }, (_, index) => {
+  const hour = Math.floor(index / 60)
+  const minute = index % 60
+  const hourLabel = ((hour + 11) % 12) + 1
+  const minuteLabel = minute === 0 ? "00" : "30"
+  const period = hour < 12 ? "AM" : "PM"
+
+  return {
+    value: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    label: `${hourLabel}:${minuteLabel} ${period}`,
+  }
+})
 
 export function defaultSlotsAvailability(): DayAvailability[] {
   return DAY_ORDER.map((day) => ({
@@ -95,19 +108,17 @@ function TimeInput({
   id?: string
 }) {
   return (
-    <input
+    <SingleSelect
       id={id}
-      type="time"
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={cn(
+      options={TIME_OPTIONS}
+      onChange={onChange}
+      triggerClassName={cn(
         "h-9 w-[120px] rounded-xl border border-input bg-background px-3 py-1.5",
         "text-sm font-medium text-foreground tabular-nums",
-        "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-        "transition-colors hover:border-primary/50 cursor-pointer",
-        "[&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer",
-        "relative",
+        "hover:border-primary/50",
       )}
+      contentClassName="w-[120px]"
     />
   )
 }

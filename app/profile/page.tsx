@@ -30,6 +30,7 @@ import {
   FieldLegend,
 } from "@/components/ui/field"
 import { MultiSelect } from "@/components/ui/multi-select"
+import { SingleSelect } from "@/components/ui/single-select"
 import {
   AvailabilitySelector,
   defaultSlotsAvailability,
@@ -165,7 +166,7 @@ export default function ProfilePage() {
     })
   }, [volunteer])
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = event.target
     if (id === "phone") {
       setFormData((prev) => ({ ...prev, phone: value.replace(/\D/g, "").slice(0, 10) }))
@@ -420,18 +421,13 @@ export default function ProfilePage() {
             <FieldGroup className="grid gap-8 md:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="transport">Transport</FieldLabel>
-                <select
+                <SingleSelect
                   id="transport"
-                  className="w-full rounded-2xl border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  ariaLabel="Transport"
                   value={formData.transport}
-                  onChange={handleChange}
-                >
-                  {TRANSPORT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                  options={TRANSPORT_OPTIONS}
+                  onChange={(transport) => setFormData((prev) => ({ ...prev, transport }))}
+                />
               </Field>
               <FieldSet>
                 <FieldLegend variant="label">Devices Available</FieldLegend>
