@@ -7,11 +7,11 @@ import {
   Phone,
   MapPin,
   Briefcase,
-  Clock,
   Truck,
   Monitor,
   Webcam,
   Smartphone,
+  CalendarClock,
 } from "lucide-react"
 import { useMutation, useQuery } from "convex/react"
 
@@ -394,7 +394,7 @@ export default function ProfilePage() {
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm overflow-visible relative z-20 shadow-foreground/3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-primary" />
+              <CalendarClock className="h-5 w-5 text-primary" />
               Availability
             </CardTitle>
             <CardDescription>

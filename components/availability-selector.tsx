@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Plus, Minus, Copy, Clock, CalendarDays } from "lucide-react"
+import { Plus, Minus, Copy, CalendarDays } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -95,26 +95,20 @@ function TimeInput({
   id?: string
 }) {
   return (
-    <div className="group relative">
-      <input
-        id={id}
-        type="time"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          "h-14 w-[160px] rounded-2xl border-2 border-border/50 bg-background/50 px-5 py-2",
-          "text-lg font-bold text-foreground tabular-nums tracking-tight shadow-sm",
-          "focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary focus:bg-background",
-          "transition-all duration-300 hover:border-primary/40 hover:bg-background cursor-pointer",
-          "appearance-none",
-          // hide native time picker icon but keep it functional
-          "[&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer",
-        )}
-      />
-      <div className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-primary/30 group-hover:text-primary/60 transition-colors duration-300">
-        <Clock className="h-5 w-5" />
-      </div>
-    </div>
+    <input
+      id={id}
+      type="time"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(
+        "h-9 w-[120px] rounded-xl border border-input bg-background px-3 py-1.5",
+        "text-sm font-medium text-foreground tabular-nums",
+        "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+        "transition-colors hover:border-primary/50 cursor-pointer",
+        "[&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer",
+        "relative",
+      )}
+    />
   )
 }
 
@@ -138,50 +132,49 @@ function SlotRow({
   isOnlySlot: boolean
 }) {
   return (
-    <div className="flex items-center gap-6 flex-wrap py-2 group/row">
-      <div className="flex items-center gap-4 bg-primary/5 p-1.5 rounded-[22px] border border-primary/10 shadow-sm transition-all duration-300 group-hover/row:shadow-md group-hover/row:border-primary/20">
+    <div className="flex items-center gap-3 flex-wrap">
+      {/* Time range */}
+      <div className="flex items-center gap-2">
         <TimeInput value={slot.start} onChange={onChangeStart} />
-        <div className="flex flex-col items-center justify-center">
-          <div className="h-px w-4 bg-primary/20" />
-          <span className="text-[10px] font-black text-primary/40 uppercase tracking-[0.2em] py-1">to</span>
-          <div className="h-px w-4 bg-primary/20" />
-        </div>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">to</span>
         <TimeInput value={slot.end} onChange={onChangeEnd} />
       </div>
 
-      <div className="flex items-center gap-2 bg-muted/30 p-1.5 rounded-2xl border border-border/50">
+      {/* +/- buttons */}
+      <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={onAdd}
-          className="h-10 w-10 flex items-center justify-center rounded-xl bg-background text-primary shadow-sm hover:bg-primary hover:text-white transition-all duration-300 active:scale-90"
+          className="h-8 w-8 flex items-center justify-center rounded-lg border border-input bg-background text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors"
           title="Add another slot"
         >
-          <Plus className="h-5 w-5" strokeWidth={2.5} />
+          <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
         </button>
         <button
           type="button"
           onClick={onRemove}
           disabled={isOnlySlot}
           className={cn(
-            "h-10 w-10 flex items-center justify-center rounded-xl transition-all duration-300 active:scale-90",
+            "h-8 w-8 flex items-center justify-center rounded-lg border transition-colors",
             isOnlySlot
-              ? "text-muted-foreground/20 cursor-not-allowed bg-transparent"
-              : "bg-background text-destructive/60 shadow-sm hover:bg-destructive hover:text-white",
+              ? "border-input/30 text-muted-foreground/30 cursor-not-allowed bg-background"
+              : "border-input bg-background text-muted-foreground hover:text-destructive hover:border-destructive/50",
           )}
           title="Remove this slot"
         >
-          <Minus className="h-5 w-5" strokeWidth={2.5} />
+          <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
         </button>
       </div>
 
+      {/* Copy to all */}
       {showCopyToAll && onCopyToAll && (
         <button
           type="button"
           onClick={onCopyToAll}
-          className="group/copy flex items-center gap-3 px-6 py-3 rounded-2xl text-sm font-bold text-primary bg-primary/5 hover:bg-primary hover:text-white transition-all duration-500 shadow-sm hover:shadow-lg hover:shadow-primary/30 active:scale-95 ml-auto md:ml-0"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-primary border border-primary/20 bg-primary/5 hover:bg-primary hover:text-white hover:border-primary transition-colors ml-auto"
         >
-          <Copy className="h-4 w-4 transition-transform group-hover/copy:rotate-12" />
-          Apply to all days
+          <Copy className="h-3 w-3" />
+          Apply to all
         </button>
       )}
     </div>
@@ -199,15 +192,13 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
   // Defensive check for undefined value
   if (!value) {
     return (
-      <div className="p-8 border-2 border-dashed border-border/50 rounded-3xl text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-muted mb-4">
-          <CalendarDays className="h-6 w-6 text-muted-foreground" />
-        </div>
-        <p className="text-muted-foreground font-medium mb-4">No availability data found</p>
-        <button 
-          type="button" 
+      <div className="py-8 border border-dashed border-border rounded-2xl text-center">
+        <CalendarDays className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+        <p className="text-sm text-muted-foreground font-medium mb-3">No availability data found</p>
+        <button
+          type="button"
           onClick={() => onChange({ mode: "slots", days: defaultSlotsAvailability() })}
-          className="px-6 py-2 rounded-xl bg-primary text-primary-foreground font-bold hover:shadow-lg transition-all active:scale-95"
+          className="px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
         >
           Initialize Schedule
         </button>
@@ -291,15 +282,17 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
   }
 
   return (
-    <div className="space-y-8">
-      {/* Mode Toggle Switch */}
-      <div className="relative inline-flex p-1.5 rounded-[20px] bg-muted/40 border border-border/50 shadow-inner">
+    <div className="space-y-5">
+      {/* Mode Toggle */}
+      <div className="inline-flex p-1 rounded-xl bg-muted/50 border border-border/50">
         <button
           type="button"
           onClick={() => handleModeChange("slots")}
           className={cn(
-            "relative z-10 px-6 py-2.5 rounded-[15px] text-sm font-black transition-all duration-500",
-            isSlots ? "text-primary shadow-xl bg-background" : "text-muted-foreground hover:text-foreground",
+            "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
+            isSlots
+              ? "bg-background text-foreground shadow-sm border border-border/50"
+              : "text-muted-foreground hover:text-foreground",
           )}
         >
           Specific Schedule
@@ -308,28 +301,31 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
           type="button"
           onClick={() => handleModeChange("hours")}
           className={cn(
-            "relative z-10 px-6 py-2.5 rounded-[15px] text-sm font-black transition-all duration-500",
-            !isSlots ? "text-primary shadow-xl bg-background" : "text-muted-foreground hover:text-foreground",
+            "px-4 py-1.5 rounded-lg text-sm font-semibold transition-all duration-200",
+            !isSlots
+              ? "bg-background text-foreground shadow-sm border border-border/50"
+              : "text-muted-foreground hover:text-foreground",
           )}
         >
           Weekly Hours
         </button>
       </div>
 
+      {/* ── Hours mode ── */}
       {!isSlots && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          {/* Day Selector Bubbles */}
-          <div className="flex gap-3 flex-wrap justify-center sm:justify-start">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {/* Day pills */}
+          <div className="flex gap-2 flex-wrap">
             {hourDays.map((d) => (
               <button
                 key={d.day}
                 type="button"
                 onClick={() => handleDayToggle(d.day, "hours")}
                 className={cn(
-                  "h-14 w-14 rounded-2xl text-sm font-black transition-all duration-500 active:scale-90",
+                  "h-8 w-10 rounded-lg text-xs font-bold transition-all duration-200",
                   d.enabled
-                    ? "bg-primary text-white shadow-2xl shadow-primary/40 rotate-3"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground -rotate-3",
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground border border-border/50",
                 )}
               >
                 {DAY_SHORT[d.day]}
@@ -337,63 +333,63 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
             ))}
           </div>
 
-          {/* Hours-per-day list */}
-          <div className="space-y-4">
+          {/* Hours rows */}
+          <div className="space-y-2">
             {hourDays
               .filter((d) => d.enabled)
               .map((dayHours) => (
-                <div key={dayHours.day} className="p-6 rounded-[32px] bg-background border border-border/50 shadow-sm hover:shadow-xl hover:border-primary/20 transition-all duration-500">
-                  <div className="flex flex-col md:flex-row md:items-center gap-6">
-                    <div className="w-40 shrink-0">
-                      <div className="inline-flex px-4 py-2 rounded-full bg-primary/5 text-primary text-sm font-black uppercase tracking-widest mb-1">
-                        {DAY_LABELS[dayHours.day]}
-                      </div>
-                      <p className="text-xs text-muted-foreground font-semibold px-1">Hours to work</p>
-                    </div>
-                    <div className="flex items-center gap-4 bg-primary/5 p-2 rounded-[22px] border border-primary/10 shadow-sm">
-                      <input
-                        type="number"
-                        min={1}
-                        max={24}
-                        value={dayHours.hours}
-                        onChange={(e) => updateHours(dayHours.day, Math.min(24, Math.max(1, Number(e.target.value))))}
-                        className={cn(
-                          "h-14 w-24 rounded-2xl border-2 border-border/50 bg-background px-4",
-                          "text-2xl font-black text-primary tabular-nums text-center shadow-sm",
-                          "focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all duration-300",
-                        )}
-                      />
-                      <span className="text-base font-bold text-primary/60 pr-2">hrs</span>
-                    </div>
+                <div
+                  key={dayHours.day}
+                  className="flex items-center gap-4 px-4 py-3 rounded-xl border border-border/50 bg-background hover:border-primary/20 transition-colors"
+                >
+                  <span className="w-28 shrink-0 text-xs font-semibold text-primary uppercase tracking-wider">
+                    {DAY_LABELS[dayHours.day]}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={dayHours.hours}
+                      onChange={(e) =>
+                        updateHours(dayHours.day, Math.min(24, Math.max(1, Number(e.target.value))))
+                      }
+                      className={cn(
+                        "h-9 w-16 rounded-xl border border-input bg-background px-2",
+                        "text-sm font-semibold text-center text-foreground",
+                        "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors",
+                      )}
+                    />
+                    <span className="text-sm text-muted-foreground font-medium">hrs</span>
                   </div>
                 </div>
               ))}
           </div>
 
           {hourDays.every((d) => !d.enabled) && (
-            <div className="py-20 text-center rounded-[40px] border-2 border-dashed border-border/50 bg-muted/20">
-              <CalendarDays className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-              <p className="text-lg font-bold text-muted-foreground">Select days to set your hours</p>
-              <p className="text-sm text-muted-foreground/60">Your schedule will appear here.</p>
+            <div className="py-10 text-center rounded-xl border border-dashed border-border/50 bg-muted/20">
+              <CalendarDays className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">Select days to set your hours</p>
             </div>
           )}
         </div>
       )}
 
+      {/* ── Slots mode ── */}
       {isSlots && (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-          {/* Day Selector Bubbles */}
-          <div className="flex gap-3 flex-wrap justify-center sm:justify-start">
+        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {/* Day pills */}
+          <div className="flex gap-2 flex-wrap">
             {slotDays.map((d) => (
               <button
                 key={d.day}
                 type="button"
                 onClick={() => handleDayToggle(d.day, "slots")}
                 className={cn(
-                  "h-14 w-14 rounded-2xl text-sm font-black transition-all duration-500 active:scale-90",
+                  "h-8 w-10 rounded-lg text-xs font-bold transition-all duration-200",
                   d.enabled
-                    ? "bg-primary text-white shadow-2xl shadow-primary/40 rotate-3"
-                    : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground -rotate-3",
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground border border-border/50",
                 )}
               >
                 {DAY_SHORT[d.day]}
@@ -401,22 +397,22 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
             ))}
           </div>
 
-          {/* Schedule List */}
-          <div className="space-y-4">
+          {/* Slot rows */}
+          <div className="space-y-2">
             {slotDays
               .filter((d) => d.enabled)
               .map((dayAvail) => {
                 const isTopDay = firstEnabledSlotDay?.day === dayAvail.day
                 return (
-                  <div key={dayAvail.day} className="p-6 rounded-[32px] bg-background border border-border/50 shadow-sm hover:shadow-xl hover:border-primary/20 transition-all duration-500 group/day">
-                    <div className="flex flex-col md:flex-row md:items-start gap-6">
-                      <div className="w-40 shrink-0">
-                        <div className="inline-flex px-4 py-2 rounded-full bg-primary/5 text-primary text-sm font-black uppercase tracking-widest mb-1">
-                          {DAY_LABELS[dayAvail.day]}
-                        </div>
-                        <p className="text-xs text-muted-foreground font-semibold px-1">Set work windows</p>
-                      </div>
-                      <div className="space-y-4 flex-1">
+                  <div
+                    key={dayAvail.day}
+                    className="px-4 py-3 rounded-xl border border-border/50 bg-background hover:border-primary/20 transition-colors"
+                  >
+                    <div className="flex flex-col gap-2.5">
+                      <span className="text-xs font-semibold text-primary uppercase tracking-wider">
+                        {DAY_LABELS[dayAvail.day]}
+                      </span>
+                      <div className="space-y-2">
                         {dayAvail.slots.map((slot, si) => (
                           <SlotRow
                             key={si}
@@ -438,10 +434,9 @@ export function AvailabilitySelector({ value, onChange }: AvailabilitySelectorPr
           </div>
 
           {slotDays.every((d) => !d.enabled) && (
-            <div className="py-20 text-center rounded-[40px] border-2 border-dashed border-border/50 bg-muted/20">
-              <CalendarDays className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
-              <p className="text-lg font-bold text-muted-foreground">Select days to build your schedule</p>
-              <p className="text-sm text-muted-foreground/60">Your availability will appear here.</p>
+            <div className="py-10 text-center rounded-xl border border-dashed border-border/50 bg-muted/20">
+              <CalendarDays className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">Select days to build your schedule</p>
             </div>
           )}
         </div>
