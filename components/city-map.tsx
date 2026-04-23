@@ -3,10 +3,30 @@
 import { useEffect, useMemo, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 import { Minus, Plus } from "lucide-react";
-import type { Circle, LatLngExpression, Map as LeafletMap } from "leaflet";
+import type { LatLngExpression, Map as LeafletMap } from "leaflet";
+import type { CityMapViewConfig } from "@/lib/city-maps";
 
-const RADIUS_PADDING_FACTOR = 1.05;
-const EPSILON_PADDING = 0.001;
+const CLEAN_LIGHT_TILE_URL =
+  "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
+const CLEAN_LIGHT_LABELS_TILE_URL =
+  "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png";
+const CLEAN_LIGHT_TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+// Leaflet zoom levels are logarithmic, so a 1.09x scale change is roughly 9%.
+const ZOOM_SCALE_STEP = 1.09;
+const ZOOM_STEP = Math.log2(ZOOM_SCALE_STEP);
+
+// Tweak these values if you want to experiment with how far the map opens.
+const DEFAULT_ZOOM_BREAKPOINTS = {
+  compact: 10,
+  standard: 10.5,
+  wide: 11,
+} as const;
+
+const DEFAULT_MIN_ZOOM_FLOOR = 5;
+const DEFAULT_MIN_ZOOM_OFFSET = 4;
+const DEFAULT_MAX_ZOOM = 19;
 
 export type CityMapProps = {
   cityName: string;
@@ -14,36 +34,52 @@ export type CityMapProps = {
     latitude: number;
     longitude: number;
   };
-  radiusKm: number;
+  view?: CityMapViewConfig;
   heightClassName?: string;
-  showCityBoundary?: boolean;
   className?: string;
 };
 
-const kmToMeters = (km: number) => km * 1000;
-const getCityBounds = (
-  leaflet: typeof import("leaflet"),
-  center: LatLngExpression,
-  radiusKm: number,
-) =>
-  leaflet
-    .latLng(center)
-    .toBounds(kmToMeters(radiusKm * RADIUS_PADDING_FACTOR))
-    .pad(EPSILON_PADDING);
+const getInitialZoom = (map: LeafletMap, overrideZoom?: number) => {
+  if (overrideZoom !== undefined) {
+    return overrideZoom;
+  }
+
+  const { x, y } = map.getSize();
+  const shortestSide = Math.min(x, y);
+
+  if (shortestSide < 720) {
+    return DEFAULT_ZOOM_BREAKPOINTS.compact;
+  }
+
+  if (shortestSide < 980) {
+    return DEFAULT_ZOOM_BREAKPOINTS.standard;
+  }
+
+  return DEFAULT_ZOOM_BREAKPOINTS.wide;
+};
+
+const getMinimumZoom = (map: LeafletMap, view?: CityMapViewConfig) => {
+  if (view?.minZoom !== undefined) {
+    return view.minZoom;
+  }
+
+  if (view?.bounds) {
+    return map.getBoundsZoom(view.bounds, true);
+  }
+
+  const initialZoom = getInitialZoom(map, view?.initialZoom);
+  return Math.max(DEFAULT_MIN_ZOOM_FLOOR, Math.floor(initialZoom - DEFAULT_MIN_ZOOM_OFFSET));
+};
 
 export function CityMap({
   cityName,
   center,
-  radiusKm,
+  view,
   heightClassName,
-  showCityBoundary = false,
   className,
 }: CityMapProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
-  const boundsCircleRef = useRef<Circle | null>(null);
-  const leafletRef = useRef<typeof import("leaflet") | null>(null);
-  const minZoomRef = useRef<number>(0);
 
   const mapCenter = useMemo<LatLngExpression>(
     () => [center.latitude, center.longitude],
@@ -64,48 +100,46 @@ export function CityMap({
         return;
       }
 
-      leafletRef.current = leaflet;
       map = leaflet.map(mapNodeRef.current, {
         zoomControl: false,
         attributionControl: true,
-        maxBoundsViscosity: 1,
+        maxZoom: DEFAULT_MAX_ZOOM,
+        zoomDelta: ZOOM_STEP,
+        zoomSnap: ZOOM_STEP,
+        maxBoundsViscosity: view?.bounds ? 1 : 0,
       });
       mapRef.current = map;
+      const minimumZoom = getMinimumZoom(map, view);
+      map.setMinZoom(minimumZoom);
+
+      if (view?.bounds) {
+        map.setMaxBounds(view.bounds);
+      }
 
       leaflet
-        .tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          maxZoom: 19,
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        .tileLayer(CLEAN_LIGHT_TILE_URL, {
+          maxZoom: DEFAULT_MAX_ZOOM,
+          attribution: CLEAN_LIGHT_TILE_ATTRIBUTION,
+          subdomains: "abcd",
         })
         .addTo(map);
 
-      const baseBounds = getCityBounds(leaflet, mapCenter, radiusKm);
-      map.fitBounds(baseBounds, { animate: false, padding: [20, 20] });
+      leaflet
+        .tileLayer(CLEAN_LIGHT_LABELS_TILE_URL, {
+          maxZoom: DEFAULT_MAX_ZOOM,
+          attribution: CLEAN_LIGHT_TILE_ATTRIBUTION,
+          subdomains: "abcd",
+          opacity: 0.9,
+        })
+        .addTo(map);
 
-      if (showCityBoundary) {
-        const displayCircle = leaflet
-          .circle(mapCenter, {
-            radius: kmToMeters(radiusKm),
-            color: "hsl(215 25% 60%)",
-            weight: 1.5,
-            fillColor: "hsl(215 28% 78%)",
-            fillOpacity: 0.12,
-            interactive: false,
-          })
-          .addTo(map);
-        boundsCircleRef.current = displayCircle;
-      }
+      const initialZoom = Math.max(
+        getInitialZoom(map, view?.initialZoom),
+        minimumZoom,
+      );
 
-      const minZoom = map.getBoundsZoom(baseBounds, true);
-      minZoomRef.current = minZoom;
-      map.setMinZoom(minZoom);
-      map.setMaxBounds(baseBounds.pad(0.08));
-
-      map.on("zoomend", () => {
-        if (map && map.getZoom() < minZoomRef.current) {
-          map.setZoom(minZoomRef.current, { animate: false });
-        }
+      map.setView(mapCenter, initialZoom, {
+        animate: false,
       });
     })();
 
@@ -114,31 +148,8 @@ export function CityMap({
       map?.off();
       map?.remove();
       mapRef.current = null;
-      boundsCircleRef.current = null;
-      leafletRef.current = null;
     };
-  }, [mapCenter, radiusKm, showCityBoundary]);
-
-  useEffect(() => {
-    const leaflet = leafletRef.current;
-    const map = mapRef.current;
-    if (!leaflet || !map) {
-      return;
-    }
-
-    const circle = boundsCircleRef.current;
-    if (circle) {
-      circle.setLatLng(mapCenter);
-      circle.setRadius(kmToMeters(radiusKm));
-    }
-
-    const baseBounds = getCityBounds(leaflet, mapCenter, radiusKm);
-    const minZoom = map.getBoundsZoom(baseBounds, true);
-    minZoomRef.current = minZoom;
-    map.setMinZoom(minZoom);
-    map.setMaxBounds(baseBounds.pad(0.08));
-    map.fitBounds(baseBounds, { animate: false, padding: [20, 20] });
-  }, [mapCenter, radiusKm]);
+  }, [cityName, mapCenter, view]);
 
   return (
     <section
@@ -150,7 +161,7 @@ export function CityMap({
         <button
           type="button"
           aria-label={`Zoom in on ${cityName}`}
-          onClick={() => mapRef.current?.zoomIn(1)}
+          onClick={() => mapRef.current?.zoomIn()}
           className="pointer-events-auto flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Plus className="h-4 w-4" />
@@ -158,7 +169,7 @@ export function CityMap({
         <button
           type="button"
           aria-label={`Zoom out on ${cityName}`}
-          onClick={() => mapRef.current?.zoomOut(1)}
+          onClick={() => mapRef.current?.zoomOut()}
           className="pointer-events-auto flex h-10 w-10 items-center justify-center border-t border-border text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Minus className="h-4 w-4" />

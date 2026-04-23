@@ -50,7 +50,7 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
                 latitude: selectedCity.latitude,
                 longitude: selectedCity.longitude,
               }}
-              radiusKm={selectedCity.radiusKm}
+              view={selectedCity.view}
               heightClassName="h-full"
               className="h-full w-full rounded-none border-0"
             />
