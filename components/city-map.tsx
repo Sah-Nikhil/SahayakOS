@@ -157,7 +157,7 @@ export function CityMap({
       className={`relative overflow-hidden rounded-xl border bg-card shadow-sm ${className ?? ""}`}
     >
       <div ref={mapNodeRef} className={`w-full ${heightClassName ?? "h-96"}`} />
-      <div className="absolute bottom-4 left-4 z-[500] flex flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-sm backdrop-blur-sm">
+      <div className="absolute bottom-4 left-4 z-500 flex flex-col overflow-hidden rounded-lg border border-border bg-background/95 shadow-sm backdrop-blur-sm">
         <button
           type="button"
           aria-label={`Zoom in on ${cityName}`}
