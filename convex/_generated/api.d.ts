@@ -10,6 +10,7 @@
 
 import type * as jobListings from "../jobListings.js";
 import type * as ngos from "../ngos.js";
+import type * as volunteerAccounts from "../volunteerAccounts.js";
 import type * as volunteers from "../volunteers.js";
 
 import type {
@@ -21,6 +22,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   jobListings: typeof jobListings;
   ngos: typeof ngos;
+  volunteerAccounts: typeof volunteerAccounts;
   volunteers: typeof volunteers;
 }>;
 

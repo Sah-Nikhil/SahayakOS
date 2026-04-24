@@ -2,9 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { useConvex } from "convex/react"
-
-import { api } from "@/convex/_generated/api"
+import { useAuth, useSignIn } from "@clerk/nextjs"
 import { cn } from "@/lib/utils"
 import { setVolunteerSession } from "@/lib/volunteer-session"
 import { Button } from "@/components/ui/button"
@@ -23,11 +21,18 @@ export function LoginForm({
   ...props
 }: React.ComponentProps<"div">) {
   const router = useRouter()
-  const convex = useConvex()
+  const { isLoaded, isSignedIn } = useAuth()
+  const { fetchStatus, signIn } = useSignIn()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      router.replace("/profile")
+    }
+  }, [isLoaded, isSignedIn, router])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -41,26 +46,47 @@ export function LoginForm({
 
     setIsSubmitting(true)
     try {
-      const volunteer = await convex.query(api.volunteers.getVolunteerByEmail, {
-        email: normalizedEmail,
-      })
-
-      if (!volunteer) {
-        setIsSubmitting(false)
-        setError("No volunteer profile found for this email. Please sign up first.")
+      if (isSignedIn) {
+        router.replace("/profile")
         return
       }
 
-      setVolunteerSession({
-        volunteerId: volunteer._id,
-        email: volunteer.contactDetails.email,
-        name: volunteer.name,
-        phone: volunteer.contactDetails.phone,
+      if (fetchStatus === "fetching" || !signIn) {
+        setError("Clerk is still loading. Please try again.")
+        return
+      }
+
+      const { error } = await signIn.create({
+        identifier: normalizedEmail,
+        password: password.trim(),
       })
-      router.push("/profile")
+
+      if (error) {
+        setError(error.message ?? "Unable to log in with those credentials.")
+        return
+      }
+
+      if (signIn.status !== "complete" || !signIn.createdSessionId) {
+        setError("Unable to log in with those credentials.")
+        return
+      }
+
+      const { error: finalizeError } = await signIn.finalize({
+        navigate: ({ decorateUrl }) => {
+          const destination = decorateUrl("/profile")
+          window.location.assign(destination)
+        },
+      })
+      if (finalizeError) {
+        setError(finalizeError.message ?? "Unable to log in with those credentials.")
+        return
+      }
+
+      setVolunteerSession({ email: normalizedEmail })
     } catch (error) {
-      setIsSubmitting(false)
       setError(error instanceof Error ? error.message : "Unable to login right now.")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -91,12 +117,7 @@ export function LoginForm({
               <Field>
                 <div className="flex items-center">
                   <FieldLabel htmlFor="password">Password</FieldLabel>
-                  <a
-                    href="/pwreset"
-                    className="ml-auto text-sm underline-offset-2 hover:underline"
-                  >
-                    Forgot your password?
-                  </a>
+                  <span className="ml-auto text-sm text-muted-foreground">Forgot your password?</span>
                 </div>
                 <Input
                   id="password"
