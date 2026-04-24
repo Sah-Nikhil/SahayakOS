@@ -101,6 +101,7 @@ export default defineSchema({
     averageRating: v.optional(v.number()),
   })
     .index("by_registrationId", ["registrationId"])
+    .index("by_pocDetails_email", ["pocDetails.email"])
     .index("by_coverageArea", ["coverageArea"])
     .index("by_isVerified", ["isVerified"]),
 

@@ -132,7 +132,6 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
           email: normalizedEmail,
           phone: normalizedPhone || undefined,
         },
-        isVerified: false,
       }
 
       const createdNgoId = await createNgo(payload)

@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation"
 import { useConvex } from "convex/react"
 
 import { api } from "@/convex/_generated/api"
+import type { Doc } from "@/convex/_generated/dataModel"
 import { cn } from "@/lib/utils"
-import { setNgoSession } from "@/lib/ngo-session"
+import { getNgoSession, setNgoSession } from "@/lib/ngo-session"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -38,12 +39,17 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
 
     setIsSubmitting(true)
     try {
-      let ngo = null
+      const currentSession = getNgoSession()
+      let ngo: Doc<"ngos"> | null = null
 
       if (normalizedEmail.includes("@")) {
-        ngo = await convex.query(api.ngos.getNgoByPocEmail, { email: normalizedEmail })
+        ngo = (await convex.query(api.ngos.getNgoByPocEmail, { email: normalizedEmail })) as
+          | Doc<"ngos">
+          | null
       } else {
-        ngo = await convex.query(api.ngos.getNgoByRegistrationId, { registrationId: normalizedEmail })
+        ngo = (await convex.query(api.ngos.getNgoByRegistrationId, { registrationId: normalizedEmail })) as
+          | Doc<"ngos">
+          | null
       }
 
       if (!ngo) {
@@ -54,9 +60,9 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
 
       setNgoSession({
         ngoId: ngo._id,
-        email: ngo.pocDetails?.email,
+        email: ngo.pocDetails?.email ?? (normalizedEmail.includes("@") ? normalizedEmail : currentSession.email),
         name: ngo.ngoName,
-        phone: ngo.pocDetails?.phone,
+        phone: ngo.pocDetails?.phone ?? currentSession.phone,
       })
 
       router.push("/ngo")
@@ -112,7 +118,7 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">Or continue with</FieldSeparator>
 
               <FieldDescription className="text-center">
-                Don't have an NGO account? <a href="/ngo/signup">Sign up</a>
+                Don&apos;t have an NGO account? <a href="/ngo/signup">Sign up</a>
               </FieldDescription>
             </FieldGroup>
           </form>

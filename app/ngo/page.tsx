@@ -16,8 +16,6 @@ import {
   FieldGroup,
   FieldLabel,
   FieldDescription,
-  FieldSet,
-  FieldLegend,
 } from "@/components/ui/field"
 import { MultiSelect } from "@/components/ui/multi-select"
 
@@ -48,7 +46,6 @@ type FormData = {
   pocName: string
   pocEmail: string
   pocPhone: string
-  isVerified?: boolean
 }
 
 const defaultFormData: FormData = {
@@ -60,7 +57,6 @@ const defaultFormData: FormData = {
   pocName: "",
   pocEmail: "",
   pocPhone: "",
-  isVerified: false,
 }
 
 const toFormData = (ngo: Doc<"ngos">): FormData => ({
@@ -72,7 +68,6 @@ const toFormData = (ngo: Doc<"ngos">): FormData => ({
   pocName: ngo.pocDetails?.name ?? "",
   pocEmail: ngo.pocDetails?.email ?? "",
   pocPhone: ngo.pocDetails?.phone ?? "",
-  isVerified: ngo.isVerified ?? false,
 })
 
 export default function NgoProfilePage() {
@@ -85,7 +80,7 @@ export default function NgoProfilePage() {
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
 
   const ngo = useQuery(
-    api.ngos.getNgoById,
+    api.ngos.getNgoByIdForProfile,
     ngoId ? { ngoId } : "skip",
   )
 
@@ -113,12 +108,13 @@ export default function NgoProfilePage() {
     }
 
     const timeoutId = window.setTimeout(() => {
+      const currentSession = getNgoSession()
       setFormData(toFormData(ngo))
       setNgoSession({
         ngoId: ngo._id,
-        email: ngo.pocDetails?.email,
+        email: ngo.pocDetails?.email ?? currentSession.email,
         name: ngo.ngoName,
-        phone: ngo.pocDetails?.phone,
+        phone: ngo.pocDetails?.phone ?? currentSession.phone,
       })
     }, 0)
 
@@ -146,7 +142,6 @@ export default function NgoProfilePage() {
         email: formData.pocEmail.trim().toLowerCase(),
         phone: formData.pocPhone.trim() || undefined,
       },
-      isVerified: formData.isVerified,
     }
 
     try {
