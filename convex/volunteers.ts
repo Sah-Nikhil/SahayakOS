@@ -1,6 +1,7 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { availabilityValidator } from "./schema";
+import type { Doc } from "./_generated/dataModel";
 
 const deviceValidator = v.union(
   v.literal("camera"),
@@ -28,21 +29,104 @@ const volunteerFields = {
   averageResponseTimeHours: v.optional(v.number()),
 };
 
+type VolunteerDocument = Omit<Doc<"volunteers">, "_id" | "_creationTime">;
+
+const getCurrentVolunteerAccount = async (ctx: QueryCtx | MutationCtx) => {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    return null;
+  }
+
+  return await ctx.db
+    .query("volunteerAccounts")
+    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+    .unique();
+};
+
+const getVolunteerLinkedToAccount = async (
+  ctx: QueryCtx | MutationCtx,
+  account: Doc<"volunteerAccounts">,
+) => {
+  const byId = account.volunteerId ? await ctx.db.get(account.volunteerId) : null;
+  if (byId) {
+    return byId;
+  }
+
+  const byAccountId = await ctx.db
+    .query("volunteers")
+    .withIndex("by_volunteerAccountId", (q) => q.eq("volunteerAccountId", account._id))
+    .unique();
+  if (byAccountId) {
+    return byAccountId;
+  }
+
+  return await ctx.db
+    .query("volunteers")
+    .withIndex("by_contactDetails_email", (q) => q.eq("contactDetails.email", account.email))
+    .unique();
+};
+
+const saveVolunteerForCurrentAccount = async (
+  ctx: MutationCtx,
+  profile: VolunteerDocument,
+) => {
+  const account = await getCurrentVolunteerAccount(ctx);
+  if (!account) {
+    throw new Error("Not authenticated");
+  }
+
+  const linkedVolunteer = await getVolunteerLinkedToAccount(ctx, account);
+  const normalizedProfile: VolunteerDocument = {
+    ...profile,
+    volunteerAccountId: account._id,
+    clerkUserId: account.clerkUserId,
+    contactDetails: {
+      email: account.email,
+      phone: profile.contactDetails.phone,
+    },
+  };
+
+  if (linkedVolunteer) {
+    await ctx.db.patch(linkedVolunteer._id, normalizedProfile);
+    const accountUpdates: {
+      name: string;
+      volunteerId: Doc<"volunteers">["_id"];
+      phone?: string;
+    } = {
+      name: normalizedProfile.name,
+      volunteerId: linkedVolunteer._id,
+    };
+
+    if (normalizedProfile.contactDetails.phone) {
+      accountUpdates.phone = normalizedProfile.contactDetails.phone;
+    }
+
+    await ctx.db.patch(account._id, accountUpdates);
+    return linkedVolunteer._id;
+  }
+
+  const volunteerId = await ctx.db.insert("volunteers", normalizedProfile);
+  const accountUpdates: {
+    name: string;
+    volunteerId: Doc<"volunteers">["_id"];
+    phone?: string;
+  } = {
+    name: normalizedProfile.name,
+    volunteerId,
+  };
+
+  if (normalizedProfile.contactDetails.phone) {
+    accountUpdates.phone = normalizedProfile.contactDetails.phone;
+  }
+
+  await ctx.db.patch(account._id, accountUpdates);
+  return volunteerId;
+};
+
 export const createVolunteer = mutation({
   args: volunteerFields,
   handler: async (ctx, args) => {
-    const existingVolunteer = await ctx.db
-      .query("volunteers")
-      .withIndex("by_contactDetails_email", (q) =>
-        q.eq("contactDetails.email", args.contactDetails.email),
-      )
-      .unique();
-
-    if (existingVolunteer) {
-      throw new Error("A volunteer with this email already exists.");
-    }
-
-    return await ctx.db.insert("volunteers", args);
+    return await saveVolunteerForCurrentAccount(ctx, args);
   },
 });
 
@@ -87,19 +171,13 @@ export const updateVolunteer = mutation({
     ...volunteerFields,
   },
   handler: async (ctx, args) => {
-    const { volunteerId, ...updates } = args;
-    const existingVolunteer = await ctx.db
-      .query("volunteers")
-      .withIndex("by_contactDetails_email", (q) =>
-        q.eq("contactDetails.email", updates.contactDetails.email),
-      )
-      .unique();
+    return await saveVolunteerForCurrentAccount(ctx, args);
+  },
+});
 
-    if (existingVolunteer && existingVolunteer._id !== volunteerId) {
-      throw new Error("A volunteer with this email already exists.");
-    }
-
-    await ctx.db.patch("volunteers", volunteerId, updates);
-    return await ctx.db.get("volunteers", volunteerId);
+export const saveCurrentVolunteerProfile = mutation({
+  args: volunteerFields,
+  handler: async (ctx, args) => {
+    return await saveVolunteerForCurrentAccount(ctx, args);
   },
 });

@@ -1,5 +1,7 @@
 "use client"
 
+import * as React from "react"
+import { useSignIn } from "@clerk/nextjs"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,15 +12,48 @@ import {
   FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { GalleryVerticalEndIcon } from "lucide-react"
 
 export function PwResetForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const { fetchStatus, signIn } = useSignIn()
+  const [email, setEmail] = React.useState("")
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [message, setMessage] = React.useState<string | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setError(null)
+    setMessage(null)
+
+    const normalizedEmail = email.trim().toLowerCase()
+    if (!normalizedEmail) {
+      setError("Please enter your email address.")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      if (fetchStatus === "fetching" || !signIn) {
+        setError("Clerk is still loading. Please try again.")
+        return
+      }
+
+      await signIn.create({ identifier: normalizedEmail })
+      await signIn.resetPasswordEmailCode.sendCode()
+      setMessage("Reset instructions were sent to your email.")
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to send reset instructions right now.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <form>
+      <form onSubmit={handleSubmit}>
         <FieldGroup>
           <div className="flex flex-col items-center gap-2 text-center">
             <div
@@ -42,14 +77,20 @@ export function PwResetForm({
               id="email"
               type="email"
               placeholder="m@example.com"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               required
             />
           </Field>
           <Field>
-            <Button type="submit">Send Reset Link</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Sending..." : "Send Reset Link"}
+            </Button>
           </Field>
+          {message ? <FieldDescription className="text-foreground">{message}</FieldDescription> : null}
+          {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
           <FieldSeparator>Or</FieldSeparator>
-          <Field className="grid gap-4 sm:grid-cols-1">
+          {/* <Field className="grid gap-4 sm:grid-cols-1">
             <Button variant="outline" type="button">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="size-5 mr-2">
                 <path
@@ -59,7 +100,7 @@ export function PwResetForm({
               </svg>
               Continue with Google
             </Button>
-          </Field>
+          </Field> */}
         </FieldGroup>
       </form>
       <FieldDescription className="px-6 text-center">

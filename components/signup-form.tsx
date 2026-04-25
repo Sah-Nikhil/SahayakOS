@@ -3,8 +3,10 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { useConvex } from "convex/react"
+import { useAuth, useSignUp } from "@clerk/nextjs"
 
 import { api } from "@/convex/_generated/api"
+import { retryOnConvexNotAuthenticated, waitForConvexToken } from "@/lib/clerk-convex-auth"
 import { cn } from "@/lib/utils"
 import { setVolunteerSession } from "@/lib/volunteer-session"
 import { Button } from "@/components/ui/button"
@@ -24,22 +26,145 @@ export function SignupForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter()
   const convex = useConvex()
+  const { isSignedIn, getToken } = useAuth()
+  const { fetchStatus, signUp } = useSignUp()
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
   const [phone, setPhone] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [confirmPassword, setConfirmPassword] = React.useState("")
+  const [verificationCode, setVerificationCode] = React.useState("")
+  const [awaitingEmailVerification, setAwaitingEmailVerification] = React.useState(false)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [message, setMessage] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
+
+  const finalizeSignup = async ({
+    normalizedEmail,
+    normalizedPhone,
+    normalizedName,
+  }: {
+    normalizedEmail: string
+    normalizedPhone: string
+    normalizedName: string
+  }) => {
+    if (!signUp) {
+      throw new Error("Clerk is still loading. Please try again.")
+    }
+
+    const { error: finalizeError } = await signUp.finalize()
+    if (finalizeError) {
+      throw finalizeError
+    }
+
+    if (!signUp.createdSessionId) {
+      throw new Error("Unable to activate the new session.")
+    }
+
+    await waitForConvexToken(getToken)
+    await retryOnConvexNotAuthenticated(async () => {
+      await convex.mutation(api.volunteerAccounts.syncCurrentVolunteerAccount, {
+        name: normalizedName,
+        phone: normalizedPhone,
+      })
+    })
+    const currentContext = await convex.query(api.volunteerAccounts.getCurrentVolunteerContext, {})
+      setVolunteerSession({
+        volunteerId: currentContext?.volunteer?._id,
+        email: currentContext?.account?.email ?? normalizedEmail,
+        name: currentContext?.account?.name ?? normalizedName,
+        phone: currentContext?.account?.phone ?? normalizedPhone,
+      })
+    window.location.assign("/profile")
+  }
+
+  const handleResendCode = async () => {
+    setError(null)
+    setMessage(null)
+
+    if (fetchStatus === "fetching" || !signUp) {
+      setError("Clerk is still loading. Please try again.")
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const { error: resendError } = await signUp.verifications.sendEmailCode()
+      if (resendError) {
+        setError(resendError.message ?? "Unable to send a new verification code right now.")
+        return
+      }
+
+      setMessage(
+        `A new verification code was sent to ${signUp.emailAddress ?? email.trim().toLowerCase()}.`,
+      )
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to send a new verification code right now.",
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setError(null)
+    setMessage(null)
 
     const normalizedEmail = email.trim().toLowerCase()
     const normalizedPhone = phone.replace(/\D/g, "").slice(0, 10)
+    const normalizedName = name.trim()
 
-    if (!name.trim() || !normalizedEmail || !normalizedPhone || !password || !confirmPassword) {
+    if (isSignedIn) {
+      router.replace("/")
+      return
+    }
+
+    if (fetchStatus === "fetching" || !signUp) {
+      setError("Clerk is still loading. Please try again.")
+      return
+    }
+
+    if (awaitingEmailVerification) {
+      if (!verificationCode.trim()) {
+        setError("Please enter the verification code from your email.")
+        return
+      }
+
+      setIsSubmitting(true)
+      try {
+        const { error: verificationError } = await signUp.verifications.verifyEmailCode({
+          code: verificationCode.trim(),
+        })
+
+        if (verificationError) {
+          setError(
+            verificationError.message ??
+              "Unable to verify the code. Please check the code and try again.",
+          )
+          return
+        }
+
+        if (signUp.status !== "complete" || !signUp.createdSessionId) {
+          setError("Email verification is still pending. Please request a new code and try again.")
+          return
+        }
+
+        await finalizeSignup({ normalizedEmail, normalizedPhone, normalizedName })
+      } catch (submitError) {
+        setError(
+          submitError instanceof Error ? submitError.message : "Unable to continue right now.",
+        )
+      } finally {
+        setIsSubmitting(false)
+      }
+      return
+    }
+
+    if (!normalizedName || !normalizedEmail || !normalizedPhone || !password || !confirmPassword) {
       setError("Please fill in all fields before continuing.")
       return
     }
@@ -51,26 +176,33 @@ export function SignupForm({
 
     setIsSubmitting(true)
     try {
-      const existingVolunteer = await convex.query(api.volunteers.getVolunteerByEmail, {
-        email: normalizedEmail,
+      const { error } = await signUp.password({
+        emailAddress: normalizedEmail,
+        password,
       })
 
-      if (existingVolunteer) {
-        setIsSubmitting(false)
-        setError("An account with this email already exists. Please login.")
+      if (error) {
+        setError(error.message ?? "Unable to continue right now.")
         return
       }
 
-      setVolunteerSession({
-        email: normalizedEmail,
-        name: name.trim(),
-        phone: normalizedPhone,
-      })
+      if (signUp.status === "complete" && signUp.createdSessionId) {
+        await finalizeSignup({ normalizedEmail, normalizedPhone, normalizedName })
+        return
+      }
 
-      router.push("/profile")
-    } catch (error) {
+      const { error: sendCodeError } = await signUp.verifications.sendEmailCode()
+      if (sendCodeError) {
+        setError(sendCodeError.message ?? "Unable to send a verification code right now.")
+        return
+      }
+
+      setAwaitingEmailVerification(true)
+      setMessage(`We sent a verification code to ${normalizedEmail}. Enter it below to finish sign up.`)
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to continue right now.")
+    } finally {
       setIsSubmitting(false)
-      setError(error instanceof Error ? error.message : "Unable to continue right now.")
     }
   }
 
@@ -95,6 +227,7 @@ export function SignupForm({
                   type="text"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
+                  disabled={awaitingEmailVerification || isSubmitting}
                   required
                 />
               </Field>
@@ -107,6 +240,7 @@ export function SignupForm({
                   placeholder="m@example.com"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
+                  disabled={awaitingEmailVerification || isSubmitting}
                   required
                 />
               </Field>
@@ -126,6 +260,7 @@ export function SignupForm({
                   type="tel"
                   value={phone}
                   onChange={(event) => setPhone(event.target.value.replace(/\D/g, "").slice(0, 10))}
+                  disabled={awaitingEmailVerification || isSubmitting}
                   required
                 />
               </Field>
@@ -142,13 +277,14 @@ export function SignupForm({
                   </a> */}
                 </div>
                 <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                />
-              </Field>
+                   id="password"
+                   type="password"
+                   value={password}
+                   onChange={(event) => setPassword(event.target.value)}
+                   disabled={awaitingEmailVerification || isSubmitting}
+                   required
+                 />
+               </Field>
               {/* Confirm Password */}
               <Field>
                 <div className="flex items-center">
@@ -161,19 +297,53 @@ export function SignupForm({
                   </a> */}
                 </div>
                 <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  required
-                />
-              </Field>
-              </div>
+                   id="confirm-password"
+                   type="password"
+                   value={confirmPassword}
+                   onChange={(event) => setConfirmPassword(event.target.value)}
+                   disabled={awaitingEmailVerification || isSubmitting}
+                   required
+                 />
+               </Field>
+               </div>
+              {awaitingEmailVerification ? (
+                <Field>
+                  <FieldLabel htmlFor="verification-code">Email Verification Code</FieldLabel>
+                  <Input
+                    id="verification-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={verificationCode}
+                    onChange={(event) => setVerificationCode(event.target.value)}
+                    disabled={isSubmitting}
+                    required
+                  />
+                  <FieldDescription>
+                    Enter the verification code sent to your email.
+                  </FieldDescription>
+                </Field>
+              ) : null}
               <Field>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Continuing..." : "Sign Up"}
+                  {awaitingEmailVerification
+                    ? isSubmitting
+                      ? "Verifying..."
+                      : "Verify Email"
+                    : isSubmitting
+                      ? "Continuing..."
+                      : "Sign Up"}
                 </Button>
               </Field>
+              {awaitingEmailVerification ? (
+                <Field>
+                  <Button type="button" variant="outline" onClick={handleResendCode} disabled={isSubmitting}>
+                    Resend verification code
+                  </Button>
+                </Field>
+              ) : null}
+              <div id="clerk-captcha" />
+              {message ? <FieldDescription className="text-foreground">{message}</FieldDescription> : null}
               {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
                 Or continue with

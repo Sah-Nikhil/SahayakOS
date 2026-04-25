@@ -60,6 +60,8 @@ export const availabilityValidator = v.union(
 
 export default defineSchema({
   volunteers: defineTable({
+    volunteerAccountId: v.optional(v.id("volunteerAccounts")),
+    clerkUserId: v.optional(v.string()),
     name: v.string(),
     age: v.number(),
     location: v.string(),
@@ -80,7 +82,21 @@ export default defineSchema({
   })
     .index("by_location", ["location"])
     .index("by_reliabilityScore", ["reliabilityScore"])
-    .index("by_contactDetails_email", ["contactDetails.email"]),
+    .index("by_contactDetails_email", ["contactDetails.email"])
+    .index("by_volunteerAccountId", ["volunteerAccountId"])
+    .index("by_clerkUserId", ["clerkUserId"]),
+
+  volunteerAccounts: defineTable({
+    tokenIdentifier: v.string(),
+    clerkUserId: v.string(),
+    email: v.string(),
+    name: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    volunteerId: v.optional(v.id("volunteers")),
+  })
+    .index("by_tokenIdentifier", ["tokenIdentifier"])
+    .index("by_email", ["email"])
+    .index("by_volunteerId", ["volunteerId"]),
 
   ngos: defineTable({
     ngoName: v.string(),
@@ -101,6 +117,7 @@ export default defineSchema({
     averageRating: v.optional(v.number()),
   })
     .index("by_registrationId", ["registrationId"])
+    .index("by_pocDetails_email", ["pocDetails.email"])
     .index("by_coverageArea", ["coverageArea"])
     .index("by_isVerified", ["isVerified"]),
 
