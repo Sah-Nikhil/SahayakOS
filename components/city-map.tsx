@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 import { Minus, Plus } from "lucide-react";
 import type { LatLngExpression, Map as LeafletMap } from "leaflet";
-import type { CityMapViewConfig } from "@/lib/city-maps";
+import type { CityMapBounds, CityMapViewConfig } from "@/lib/city-maps";
 
 const CLEAN_LIGHT_TILE_URL =
   "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
@@ -58,13 +58,20 @@ const getInitialZoom = (map: LeafletMap, overrideZoom?: number) => {
   return DEFAULT_ZOOM_BREAKPOINTS.wide;
 };
 
+const toLeafletBounds = (
+  bounds: CityMapBounds,
+): [[number, number], [number, number]] => [
+  [bounds.south, bounds.west],
+  [bounds.north, bounds.east],
+];
+
 const getMinimumZoom = (map: LeafletMap, view?: CityMapViewConfig) => {
   if (view?.minZoom !== undefined) {
     return view.minZoom;
   }
 
   if (view?.bounds) {
-    return map.getBoundsZoom(view.bounds, true);
+    return map.getBoundsZoom(toLeafletBounds(view.bounds), true);
   }
 
   const initialZoom = getInitialZoom(map, view?.initialZoom);
@@ -113,7 +120,7 @@ export function CityMap({
       map.setMinZoom(minimumZoom);
 
       if (view?.bounds) {
-        map.setMaxBounds(view.bounds);
+        map.setMaxBounds(toLeafletBounds(view.bounds));
       }
 
       leaflet

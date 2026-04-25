@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { useAuth, useClerk, useUser } from "@clerk/nextjs"
 import {
   User,
   Mail,
@@ -17,7 +18,8 @@ import {
 import { useMutation, useQuery } from "convex/react"
 
 import { api } from "@/convex/_generated/api"
-import type { Doc, Id } from "@/convex/_generated/dataModel"
+import type { Doc } from "@/convex/_generated/dataModel"
+import { retryOnConvexNotAuthenticated } from "@/lib/clerk-convex-auth"
 import { getVolunteerSession, setVolunteerSession } from "@/lib/volunteer-session"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -127,53 +129,90 @@ const toFormData = (volunteer: Doc<"volunteers">): FormData => ({
 
 export default function ProfilePage() {
   const router = useRouter()
-  const createVolunteer = useMutation(api.volunteers.createVolunteer)
-  const updateVolunteer = useMutation(api.volunteers.updateVolunteer)
-  const [volunteerId, setVolunteerId] = React.useState<Id<"volunteers"> | null>(null)
-  const [formData, setFormData] = React.useState<FormData>(defaultFormData)
-  const [isSaving, setIsSaving] = React.useState(false)
-  const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
-
-  const volunteer = useQuery(
-    api.volunteers.getVolunteerById,
-    volunteerId ? { volunteerId } : "skip",
-  )
-
-  React.useEffect(() => {
+  const clerk = useClerk()
+  const { isLoaded, isSignedIn } = useAuth()
+  const { isLoaded: isUserLoaded, user } = useUser()
+  const saveVolunteerProfile = useMutation(api.volunteers.saveCurrentVolunteerProfile)
+  const syncCurrentVolunteerAccount = useMutation(api.volunteerAccounts.syncCurrentVolunteerAccount)
+  const currentContext = useQuery(api.volunteerAccounts.getCurrentVolunteerContext)
+  const [formData, setFormData] = React.useState<FormData>(() => {
     const session = getVolunteerSession()
-    const timeoutId = window.setTimeout(() => {
-      setFormData((prev) => ({
-        ...prev,
-        name: session.name ?? prev.name,
-        email: session.email ?? prev.email,
-        phone: session.phone ?? prev.phone,
-      }))
-
-      if (session.volunteerId) {
-        setVolunteerId(session.volunteerId as Id<"volunteers">)
-      }
-    }, 0)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [])
+    return {
+      ...defaultFormData,
+      name: session.name ?? "",
+      email: session.email ?? "",
+      phone: session.phone ?? "",
+    }
+  })
+  const [isSaving, setIsSaving] = React.useState(false)
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false)
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
+  const hydratedContextRef = React.useRef(false)
+  const syncedAccountRef = React.useRef(false)
 
   React.useEffect(() => {
-    if (!volunteer) {
+    if (!currentContext || hydratedContextRef.current) {
       return
     }
 
-    const timeoutId = window.setTimeout(() => {
-      setFormData(toFormData(volunteer))
-      setVolunteerSession({
-        volunteerId: volunteer._id,
-        email: volunteer.contactDetails.email,
-        name: volunteer.name,
-        phone: volunteer.contactDetails.phone,
-      })
-    }, 0)
+    if (currentContext.volunteer) {
+      // The form should hydrate once when Convex data arrives.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFormData(toFormData(currentContext.volunteer))
+    } else if (currentContext.account) {
+      setFormData((prev) => ({
+        ...prev,
+        name: currentContext.account?.name ?? prev.name,
+        email: currentContext.account?.email ?? prev.email,
+        phone: currentContext.account?.phone ?? prev.phone,
+      }))
+    }
 
-    return () => window.clearTimeout(timeoutId)
-  }, [volunteer])
+    hydratedContextRef.current = true
+  }, [currentContext])
+
+  React.useEffect(() => {
+    if (
+      !isLoaded ||
+      !isSignedIn ||
+      !isUserLoaded ||
+      !user ||
+      currentContext ||
+      syncedAccountRef.current
+    ) {
+      return
+    }
+
+    syncedAccountRef.current = true
+    const session = getVolunteerSession()
+    const email =
+      user.primaryEmailAddress?.emailAddress ??
+      user.emailAddresses[0]?.emailAddress ??
+      session.email
+
+    void retryOnConvexNotAuthenticated(async () => {
+      await syncCurrentVolunteerAccount({
+        ...(email ? { email } : {}),
+        ...(session.name ? { name: session.name } : {}),
+        ...(session.phone ? { phone: session.phone } : {}),
+      })
+    }).catch((error) => {
+      syncedAccountRef.current = false
+      setErrorMessage(error instanceof Error ? error.message : "Unable to load your profile right now.")
+    })
+  }, [currentContext, isLoaded, isSignedIn, isUserLoaded, syncCurrentVolunteerAccount, user])
+
+  const handleLogout = async () => {
+    setErrorMessage(null)
+    setIsLoggingOut(true)
+    try {
+      setVolunteerSession({})
+      await clerk.signOut({ redirectUrl: "/login" })
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to log out right now.")
+      setIsLoggingOut(false)
+    }
+  }
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = event.target
@@ -224,33 +263,16 @@ export default function ProfilePage() {
     }
 
     try {
-      if (volunteerId) {
-        const updatedVolunteer = await updateVolunteer({
-          volunteerId,
-          ...payload,
-        })
-
-        if (updatedVolunteer) {
-          setVolunteerSession({
-            volunteerId: updatedVolunteer._id,
-            email: updatedVolunteer.contactDetails.email,
-            name: updatedVolunteer.name,
-            phone: updatedVolunteer.contactDetails.phone,
-          })
-        }
-      } else {
-        const createdVolunteerId = await createVolunteer(payload)
-        setVolunteerId(createdVolunteerId)
-        setVolunteerSession({
-          volunteerId: createdVolunteerId,
-          email: payload.contactDetails.email,
-          name: payload.name,
-          phone: payload.contactDetails.phone,
-        })
-      }
+      const volunteerId = await saveVolunteerProfile(payload)
+      setVolunteerSession({
+        volunteerId,
+        email: formData.email.trim().toLowerCase(),
+        name: payload.name,
+        phone: payload.contactDetails.phone,
+      })
 
       setIsSaving(false)
-      router.replace("/")
+      window.location.assign("/")
     } catch (error) {
       setIsSaving(false)
       setErrorMessage(error instanceof Error ? error.message : "Unable to save profile right now.")
@@ -274,9 +296,20 @@ export default function ProfilePage() {
             You can jump to the main map/job listing page at any time.
           </p>
         </div>
-        <Button type="button" variant="outline" onClick={() => router.push("/")}>
-          Go to main map
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button type="button" variant="outline" onClick={() => router.push("/")}>
+            Go to main map
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          >
+            {isLoggingOut ? "Logging out..." : "Logout"}
+          </Button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
@@ -353,6 +386,7 @@ export default function ProfilePage() {
                     placeholder="john@example.com"
                     value={formData.email}
                     onChange={handleChange}
+                    readOnly
                     required
                   />
                 </div>
