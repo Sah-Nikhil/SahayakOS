@@ -2,11 +2,15 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { useConvex, useMutation } from "convex/react"
+import { useAuth, useUser } from "@clerk/nextjs"
+import { useQuery } from "convex/react"
+import { useMutation } from "convex/react"
 
 import { api } from "@/convex/_generated/api"
-import { cn } from "@/lib/utils"
+import type { Doc } from "@/convex/_generated/dataModel"
+import { retryOnConvexNotAuthenticated, waitForConvexToken } from "@/lib/clerk-convex-auth"
 import { setNgoSession } from "@/lib/ngo-session"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -46,8 +50,6 @@ type FormData = {
   pocName: string
   pocEmail: string
   pocPhone: string
-  password: string
-  confirmPassword: string
 }
 
 const defaultFormData: FormData = {
@@ -59,20 +61,60 @@ const defaultFormData: FormData = {
   pocName: "",
   pocEmail: "",
   pocPhone: "",
-  password: "",
-  confirmPassword: "",
 }
+
+const toFormData = (ngo: Doc<"ngos">): FormData => ({
+  ngoName: ngo.ngoName,
+  registrationId: ngo.registrationId,
+  hqLocation: ngo.hqLocation,
+  coverageArea: ngo.coverageArea ?? [],
+  focusAreas: ngo.focusAreas ?? [],
+  pocName: ngo.pocDetails?.name ?? "",
+  pocEmail: ngo.pocDetails?.email ?? "",
+  pocPhone: ngo.pocDetails?.phone ?? "",
+})
 
 export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div">) {
   const router = useRouter()
-  const convex = useConvex()
-  const createNgo = useMutation(api.ngos.createNgo)
+  const { isLoaded, isSignedIn, getToken } = useAuth()
+  const { isLoaded: isUserLoaded, user } = useUser()
+  const saveNgoProfile = useMutation(api.ngos.saveCurrentNgoProfile)
+  const currentNgo = useQuery(api.ngos.getCurrentNgoProfile, isSignedIn ? {} : "skip")
   const [formData, setFormData] = React.useState<FormData>(defaultFormData)
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [isSaving, setIsSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const hydratedRef = React.useRef(false)
+
+  const authEmail =
+    user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? ""
+
+  React.useEffect(() => {
+    if (!currentNgo || hydratedRef.current) {
+      return
+    }
+
+    setFormData(toFormData(currentNgo))
+    hydratedRef.current = true
+  }, [currentNgo])
+
+  React.useEffect(() => {
+    if (!isSignedIn || !isUserLoaded || hydratedRef.current || currentNgo) {
+      return
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      pocEmail: authEmail || prev.pocEmail,
+    }))
+  }, [authEmail, currentNgo, isSignedIn, isUserLoaded])
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = event.target
+    if (id === "pocPhone") {
+      setFormData((prev) => ({ ...prev, pocPhone: value.replace(/\D/g, "").slice(0, 10) }))
+      return
+    }
+
     setFormData((prev) => ({ ...prev, [id]: value }))
   }
 
@@ -80,7 +122,17 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
     event.preventDefault()
     setError(null)
 
-    const normalizedEmail = formData.pocEmail.trim().toLowerCase()
+    if (!isLoaded || !isSignedIn || !isUserLoaded || !user) {
+      setError("Please sign in with Clerk before creating or editing your NGO profile.")
+      return
+    }
+
+    if (!authEmail) {
+      setError("Your Clerk account is missing an email address.")
+      return
+    }
+
+    const normalizedEmail = authEmail.trim().toLowerCase()
     const normalizedPhone = formData.pocPhone.replace(/\D/g, "").slice(0, 10)
 
     if (
@@ -88,66 +140,82 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
       !formData.registrationId.trim() ||
       !formData.hqLocation.trim() ||
       formData.coverageArea.length === 0 ||
-      formData.focusAreas.length === 0 ||
-      !normalizedEmail ||
-      !normalizedPhone ||
-      !formData.password ||
-      !formData.confirmPassword
+      formData.focusAreas.length === 0
     ) {
       setError("Please fill in all required fields before continuing.")
       return
     }
 
-    if (formData.password !== formData.confirmPassword) {
-      setError("Passwords do not match.")
-      return
-    }
-
-    setIsSubmitting(true)
+    setIsSaving(true)
     try {
-      // check existing by poc email
-      const existingByEmail = await convex.query(api.ngos.getNgoByPocEmail, { email: normalizedEmail })
-      if (existingByEmail) {
-        setIsSubmitting(false)
-        setError("An NGO with this contact email already exists. Please login.")
-        return
-      }
-
-      // check existing by registrationId
-      const existingByReg = await convex.query(api.ngos.getNgoByRegistrationId, { registrationId: formData.registrationId.trim() })
-      if (existingByReg) {
-        setIsSubmitting(false)
-        setError("An NGO with this registration ID already exists. If this is your organization, please login.")
-        return
-      }
-
-      const payload = {
-        ngoName: formData.ngoName.trim(),
-        registrationId: formData.registrationId.trim(),
-        hqLocation: formData.hqLocation.trim(),
-        coverageArea: formData.coverageArea,
-        focusAreas: formData.focusAreas,
-        pocDetails: {
-          name: formData.pocName.trim() || formData.ngoName.trim(),
-          email: normalizedEmail,
-          phone: normalizedPhone || undefined,
-        },
-      }
-
-      const createdNgoId = await createNgo(payload)
-
-      setNgoSession({
-        ngoId: createdNgoId,
-        email: normalizedEmail,
-        name: formData.ngoName.trim(),
-        phone: normalizedPhone,
+      await waitForConvexToken(getToken)
+      const ngoId = await retryOnConvexNotAuthenticated(async () => {
+        return await saveNgoProfile({
+          ngoName: formData.ngoName.trim(),
+          registrationId: formData.registrationId.trim(),
+          hqLocation: formData.hqLocation.trim(),
+          coverageArea: formData.coverageArea,
+          focusAreas: formData.focusAreas,
+          pocDetails: {
+            name: formData.pocName.trim() || formData.ngoName.trim(),
+            email: normalizedEmail,
+            phone: normalizedPhone || undefined,
+          },
+        })
       })
 
-      router.push("/ngo")
-    } catch (err) {
-      setIsSubmitting(false)
-      setError(err instanceof Error ? err.message : "Unable to continue right now.")
+      setNgoSession({
+        ngoId,
+        email: normalizedEmail,
+        name: formData.ngoName.trim(),
+        phone: normalizedPhone || undefined,
+      })
+
+      router.replace("/ngo")
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to save NGO profile right now.")
+    } finally {
+      setIsSaving(false)
     }
+  }
+
+  if (!isLoaded || !isUserLoaded) {
+    return (
+      <div className={cn("flex flex-col gap-6", className)} {...props}>
+        <Card className="overflow-hidden p-0">
+          <CardContent className="p-6 md:p-8">
+            <p className="text-sm text-muted-foreground">Loading your Clerk session...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className={cn("flex flex-col gap-6", className)} {...props}>
+        <Card className="overflow-hidden p-0">
+          <CardContent className="grid gap-6 p-6 md:p-8">
+            <div className="space-y-2 text-center">
+              <h1 className="text-2xl font-bold">Register your NGO</h1>
+              <p className="text-sm text-muted-foreground">
+                Sign in with Clerk to create or update your NGO profile securely.
+              </p>
+            </div>
+            <FieldGroup>
+              <Field>
+                <Button type="button" onClick={() => router.push("/ngo/login")}>
+                  Sign in
+                </Button>
+              </Field>
+              <FieldDescription className="text-center">
+                Need a Clerk account? <a href="/signup">Create one</a>
+              </FieldDescription>
+            </FieldGroup>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -224,6 +292,7 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
                   type="text"
                   value={formData.pocName}
                   onChange={handleChange}
+                  required
                 />
               </Field>
 
@@ -232,11 +301,11 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
                 <Input
                   id="pocEmail"
                   type="email"
-                  placeholder="contact@ngo.org"
-                  value={formData.pocEmail}
-                  onChange={handleChange}
+                  value={authEmail}
+                  readOnly
                   required
                 />
+                <FieldDescription>This email comes from your Clerk account.</FieldDescription>
               </Field>
 
               <Field>
@@ -245,52 +314,24 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
                   id="pocPhone"
                   type="tel"
                   value={formData.pocPhone}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, pocPhone: e.target.value.replace(/\D/g, "").slice(0, 10) }))}
+                  onChange={handleChange}
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-4">
-                <Field>
-                  <div className="flex items-center">
-                    <FieldLabel htmlFor="password">Password</FieldLabel>
-                  </div>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                    required
-                  />
-                </Field>
-
-                <Field>
-                  <div className="flex items-center">
-                    <FieldLabel htmlFor="confirm-password">Confirm Password</FieldLabel>
-                  </div>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    value={formData.confirmPassword}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, confirmPassword: e.target.value }))}
-                    required
-                  />
-                </Field>
-              </div>
+              {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
 
               <Field>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? "Continuing..." : "Sign Up"}
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Save NGO Profile"}
                 </Button>
               </Field>
-
-              {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
 
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
                 Or continue with
               </FieldSeparator>
 
               <FieldDescription className="text-center">
-                Already have an NGO account? <a href="/ngo/login">Login</a>
+                Already registered? <a href="/ngo/login">Login</a>
               </FieldDescription>
             </FieldGroup>
           </form>
@@ -305,7 +346,8 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        By clicking continue, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+        By clicking continue, you agree to our <a href="#">Terms of Service</a>{" "}
+        and <a href="#">Privacy Policy</a>.
       </FieldDescription>
     </div>
   )

@@ -4,10 +4,12 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { Users, MapPin, Mail, Phone, Globe } from "lucide-react"
 import { useMutation, useQuery } from "convex/react"
+import { useAuth, useUser } from "@clerk/nextjs"
 
 import { api } from "@/convex/_generated/api"
-import type { Doc, Id } from "@/convex/_generated/dataModel"
-import { getNgoSession, setNgoSession } from "@/lib/ngo-session"
+import type { Doc } from "@/convex/_generated/dataModel"
+import { retryOnConvexNotAuthenticated, waitForConvexToken } from "@/lib/clerk-convex-auth"
+import { setNgoSession } from "@/lib/ngo-session"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -72,54 +74,41 @@ const toFormData = (ngo: Doc<"ngos">): FormData => ({
 
 export default function NgoProfilePage() {
   const router = useRouter()
-  const createNgo = useMutation(api.ngos.createNgo)
-  const updateNgo = useMutation(api.ngos.updateNgo)
-  const [ngoId, setNgoId] = React.useState<Id<"ngos"> | null>(null)
+  const { isLoaded, isSignedIn, getToken } = useAuth()
+  const { isLoaded: isUserLoaded, user } = useUser()
+  const saveNgoProfile = useMutation(api.ngos.saveCurrentNgoProfile)
   const [formData, setFormData] = React.useState<FormData>(defaultFormData)
   const [isSaving, setIsSaving] = React.useState(false)
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
+  const hydratedRef = React.useRef(false)
 
   const ngo = useQuery(
-    api.ngos.getNgoByIdForProfile,
-    ngoId ? { ngoId } : "skip",
+    api.ngos.getCurrentNgoProfile,
+    isSignedIn ? {} : "skip",
   )
 
   React.useEffect(() => {
-    const session = getNgoSession()
-    const timeoutId = window.setTimeout(() => {
-      setFormData((prev) => ({
-        ...prev,
-        ngoName: session.name ?? prev.ngoName,
-        pocEmail: session.email ?? prev.pocEmail,
-        pocPhone: session.phone ?? prev.pocPhone,
-      }))
-
-      if (session.ngoId) {
-        setNgoId(session.ngoId as Id<"ngos">)
-      }
-    }, 0)
-
-    return () => window.clearTimeout(timeoutId)
-  }, [])
-
-  React.useEffect(() => {
-    if (!ngo) {
+    if (!ngo || hydratedRef.current) {
       return
     }
 
-    const timeoutId = window.setTimeout(() => {
-      const currentSession = getNgoSession()
-      setFormData(toFormData(ngo))
-      setNgoSession({
-        ngoId: ngo._id,
-        email: ngo.pocDetails?.email ?? currentSession.email,
-        name: ngo.ngoName,
-        phone: ngo.pocDetails?.phone ?? currentSession.phone,
-      })
-    }, 0)
-
-    return () => window.clearTimeout(timeoutId)
+    setFormData(toFormData(ngo))
+    hydratedRef.current = true
   }, [ngo])
+
+  React.useEffect(() => {
+    if (!isSignedIn || !isUserLoaded || hydratedRef.current || ngo) {
+      return
+    }
+
+    const email =
+      user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? ""
+
+    setFormData((prev) => ({
+      ...prev,
+      pocEmail: email || prev.pocEmail,
+    }))
+  }, [isSignedIn, isUserLoaded, ngo, user])
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = event.target
@@ -130,6 +119,19 @@ export default function NgoProfilePage() {
     event.preventDefault()
     setErrorMessage(null)
 
+    if (!isLoaded || !isSignedIn || !isUserLoaded || !user) {
+      setErrorMessage("Please sign in with Clerk before editing your NGO profile.")
+      return
+    }
+
+    const authEmail =
+      user.primaryEmailAddress?.emailAddress ?? user.emailAddresses[0]?.emailAddress ?? ""
+
+    if (!authEmail) {
+      setErrorMessage("Your Clerk account is missing an email address.")
+      return
+    }
+
     setIsSaving(true)
     const payload = {
       ngoName: formData.ngoName.trim(),
@@ -139,40 +141,62 @@ export default function NgoProfilePage() {
       focusAreas: formData.focusAreas,
       pocDetails: {
         name: formData.pocName.trim(),
-        email: formData.pocEmail.trim().toLowerCase(),
+        email: authEmail.trim().toLowerCase(),
         phone: formData.pocPhone.trim() || undefined,
       },
     }
 
     try {
-      if (ngoId) {
-        const updatedNgo = await updateNgo({ ngoId, ...payload })
+      await waitForConvexToken(getToken)
+      const ngoId = await retryOnConvexNotAuthenticated(async () => {
+        return await saveNgoProfile(payload)
+      })
 
-        if (updatedNgo) {
-          setNgoSession({
-            ngoId: updatedNgo._id,
-            email: updatedNgo.pocDetails?.email,
-            name: updatedNgo.ngoName,
-            phone: updatedNgo.pocDetails?.phone,
-          })
-        }
-      } else {
-        const createdNgoId = await createNgo(payload)
-        setNgoId(createdNgoId)
-        setNgoSession({
-          ngoId: createdNgoId,
-          email: payload.pocDetails.email,
-          name: payload.ngoName,
-          phone: payload.pocDetails.phone,
-        })
-      }
+      setNgoSession({
+        ngoId,
+        email: payload.pocDetails.email,
+        name: payload.ngoName,
+        phone: payload.pocDetails.phone,
+      })
 
       setIsSaving(false)
-      router.replace("/")
+      router.replace("/ngo")
     } catch (error) {
       setIsSaving(false)
       setErrorMessage(error instanceof Error ? error.message : "Unable to save NGO profile right now.")
     }
+  }
+
+  if (!isLoaded || !isUserLoaded) {
+    return (
+      <div className="container mx-auto max-w-4xl py-10 px-4 md:px-6">
+        <Card className="overflow-hidden p-0">
+          <CardContent className="p-6 md:p-8">
+            <p className="text-sm text-muted-foreground">Loading your Clerk session...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="container mx-auto max-w-4xl py-10 px-4 md:px-6">
+        <Card className="overflow-hidden p-0">
+          <CardContent className="grid gap-4 p-6 md:p-8">
+            <div className="space-y-2 text-center">
+              <h1 className="text-2xl font-bold">NGO Profile</h1>
+              <p className="text-sm text-muted-foreground">
+                Sign in with Clerk to manage your NGO profile securely.
+              </p>
+            </div>
+            <Button type="button" onClick={() => router.push("/ngo/login")}>
+              Sign in
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -263,12 +287,16 @@ export default function NgoProfilePage() {
                     id="pocEmail"
                     type="email"
                     className="pl-9"
-                    placeholder="contact@ngo.org"
-                    value={formData.pocEmail}
-                    onChange={handleChange}
+                    value={
+                      user?.primaryEmailAddress?.emailAddress ??
+                      user?.emailAddresses[0]?.emailAddress ??
+                      formData.pocEmail
+                    }
+                    readOnly
                     required
                   />
                 </div>
+                <FieldDescription>This email comes from your Clerk account.</FieldDescription>
               </Field>
 
               <Field>

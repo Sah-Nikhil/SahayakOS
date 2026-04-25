@@ -99,6 +99,8 @@ export default defineSchema({
     .index("by_volunteerId", ["volunteerId"]),
 
   ngos: defineTable({
+    ownerTokenIdentifier: v.optional(v.string()),
+    clerkUserId: v.optional(v.string()),
     ngoName: v.string(),
     registrationId: v.string(),
     hqLocation: v.string(),
@@ -116,6 +118,7 @@ export default defineSchema({
     volunteerTreatmentScore: v.optional(v.number()),
     averageRating: v.optional(v.number()),
   })
+    .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
     .index("by_registrationId", ["registrationId"])
     .index("by_pocDetails_email", ["pocDetails.email"])
     .index("by_coverageArea", ["coverageArea"])

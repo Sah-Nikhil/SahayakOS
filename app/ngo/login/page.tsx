@@ -2,11 +2,11 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { useAuth, useSignIn } from "@clerk/nextjs"
 import { useConvex } from "convex/react"
 
 import { api } from "@/convex/_generated/api"
-import type { Doc } from "@/convex/_generated/dataModel"
-import { cn } from "@/lib/utils"
+import { retryOnConvexNotAuthenticated, waitForConvexToken } from "@/lib/clerk-convex-auth"
 import { getNgoSession, setNgoSession } from "@/lib/ngo-session"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -22,10 +22,32 @@ import { Input } from "@/components/ui/input"
 export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div">) {
   const router = useRouter()
   const convex = useConvex()
+  const { isSignedIn, getToken } = useAuth()
+  const { fetchStatus, signIn } = useSignIn()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+
+  const finalizeNgoSession = async () => {
+    const currentNgo = await retryOnConvexNotAuthenticated(async () => {
+      return await convex.query(api.ngos.getCurrentNgoProfile, {})
+    })
+
+    if (!currentNgo) {
+      router.replace("/ngo/signup")
+      return
+    }
+
+    const currentSession = getNgoSession()
+    setNgoSession({
+      ngoId: currentNgo._id,
+      email: currentNgo.pocDetails?.email ?? currentSession.email,
+      name: currentNgo.ngoName,
+      phone: currentNgo.pocDetails?.phone ?? currentSession.phone,
+    })
+    router.replace("/ngo")
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -39,41 +61,49 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
 
     setIsSubmitting(true)
     try {
-      const currentSession = getNgoSession()
-      let ngo: Doc<"ngos"> | null = null
-
-      if (normalizedEmail.includes("@")) {
-        ngo = (await convex.query(api.ngos.getNgoByPocEmail, { email: normalizedEmail })) as
-          | Doc<"ngos">
-          | null
-      } else {
-        ngo = (await convex.query(api.ngos.getNgoByRegistrationId, { registrationId: normalizedEmail })) as
-          | Doc<"ngos">
-          | null
-      }
-
-      if (!ngo) {
-        setIsSubmitting(false)
-        setError("No NGO profile found for this email or registration ID. Please sign up first.")
+      if (isSignedIn) {
+        await waitForConvexToken(getToken)
+        await finalizeNgoSession()
         return
       }
 
-      setNgoSession({
-        ngoId: ngo._id,
-        email: ngo.pocDetails?.email ?? (normalizedEmail.includes("@") ? normalizedEmail : currentSession.email),
-        name: ngo.ngoName,
-        phone: ngo.pocDetails?.phone ?? currentSession.phone,
+      if (fetchStatus === "fetching" || !signIn) {
+        setError("Clerk is still loading. Please try again.")
+        return
+      }
+
+      const { error } = await signIn.password({
+        identifier: normalizedEmail,
+        password: password.trim(),
       })
 
-      router.push("/ngo")
+      if (error) {
+        setError(error.message ?? "Unable to log in with those credentials.")
+        return
+      }
+
+      if (signIn.status !== "complete" || !signIn.createdSessionId) {
+        setError("Unable to log in with those credentials.")
+        return
+      }
+
+      const { error: finalizeError } = await signIn.finalize()
+      if (finalizeError) {
+        setError(finalizeError.message ?? "Unable to log in with those credentials.")
+        return
+      }
+
+      await waitForConvexToken(getToken)
+      await finalizeNgoSession()
     } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to log in right now.")
+    } finally {
       setIsSubmitting(false)
-      setError(error instanceof Error ? error.message : "Unable to login right now.")
     }
   }
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
+    <div className={className} {...props}>
       <Card className="overflow-hidden p-0">
         <CardContent className="grid p-0 md:grid-cols-2">
           <form className="p-6 md:p-8" onSubmit={handleSubmit}>
@@ -83,11 +113,11 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
               </div>
 
               <Field>
-                <FieldLabel htmlFor="emailOrReg">Email or Registration ID</FieldLabel>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
-                  id="emailOrReg"
-                  type="text"
-                  placeholder="contact@ngo.org or REG-1234"
+                  id="email"
+                  type="email"
+                  placeholder="contact@ngo.org"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   required
@@ -115,7 +145,9 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
 
               {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
 
-              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">Or continue with</FieldSeparator>
+              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
+                Or continue with
+              </FieldSeparator>
 
               <FieldDescription className="text-center">
                 Don&apos;t have an NGO account? <a href="/ngo/signup">Sign up</a>
@@ -133,7 +165,8 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        By clicking continue, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
+        By clicking continue, you agree to our <a href="#">Terms of Service</a> and{" "}
+        <a href="#">Privacy Policy</a>.
       </FieldDescription>
     </div>
   )
