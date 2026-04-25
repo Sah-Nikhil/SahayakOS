@@ -5,16 +5,12 @@ export type CityMapConfig = {
   view?: CityMapViewConfig;
 };
 
-type CityMapBoundsPoint = [number, number];
-
-export type CityMapBounds =
-  | [CityMapBoundsPoint, CityMapBoundsPoint]
-  | [
-      CityMapBoundsPoint,
-      CityMapBoundsPoint,
-      CityMapBoundsPoint,
-      CityMapBoundsPoint,
-    ];
+export type CityMapBounds = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+};
 
 export type CityMapViewConfig = {
   initialZoom?: number;
@@ -33,6 +29,13 @@ type RawCityMapViewConfig = {
   initialZoom?: unknown;
   minZoom?: unknown;
   bounds?: unknown;
+};
+
+type RawCityMapBounds = {
+  north?: unknown;
+  south?: unknown;
+  east?: unknown;
+  west?: unknown;
 };
 
 const CITY_MAPS_ENV_KEY = "NEXT_PUBLIC_CITY_MAPS";
@@ -56,51 +59,37 @@ const toOptionalZoom = (
   return value;
 };
 
-const toBoundsPoint = (
-  value: unknown,
-  fieldName: string,
-  cityName: string,
-): CityMapBoundsPoint => {
+const toBounds = (value: unknown, cityName: string): CityMapBounds => {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(
+      `City "${cityName}" has invalid "bounds". Use { north, south, east, west }.`,
+    );
+  }
+
+  const raw = value as RawCityMapBounds;
+  const north = raw.north;
+  const south = raw.south;
+  const east = raw.east;
+  const west = raw.west;
+
   if (
-    !Array.isArray(value) ||
-    value.length !== 2 ||
-    !isFiniteNumber(value[0]) ||
-    !isFiniteNumber(value[1])
+    !isFiniteNumber(north) ||
+    !isFiniteNumber(south) ||
+    !isFiniteNumber(east) ||
+    !isFiniteNumber(west)
   ) {
     throw new Error(
-      `City "${cityName}" has invalid "${fieldName}" coordinates. Each entry must be a finite number.`,
+      `City "${cityName}" has invalid "bounds" coordinates. Each edge must be a finite number.`,
     );
   }
 
-  return [value[0], value[1]];
-};
-
-const toBounds = (value: unknown, cityName: string): CityMapBounds => {
-  if (!Array.isArray(value) || (value.length !== 2 && value.length !== 4)) {
+  if (north <= south || east <= west) {
     throw new Error(
-      `City "${cityName}" has invalid "bounds". Use [[southWestLat, southWestLng], [northEastLat, northEastLng]] or [[northWestLat, northWestLng], [northEastLat, northEastLng], [southWestLat, southWestLng], [southEastLat, southEastLng]].`,
+      `City "${cityName}" has invalid "bounds" ordering. Require north > south and east > west.`,
     );
   }
 
-  if (value.length === 2) {
-    const southWest = toBoundsPoint(value[0], "bounds[0]", cityName);
-    const northEast = toBoundsPoint(value[1], "bounds[1]", cityName);
-
-    if (southWest[0] > northEast[0] || southWest[1] > northEast[1]) {
-      throw new Error(
-        `City "${cityName}" has "bounds" in the wrong order. Use [[southWestLat, southWestLng], [northEastLat, northEastLng]].`,
-      );
-    }
-
-    return [southWest, northEast];
-  }
-
-  const northWest = toBoundsPoint(value[0], "bounds[0]", cityName);
-  const northEast = toBoundsPoint(value[1], "bounds[1]", cityName);
-  const southWest = toBoundsPoint(value[2], "bounds[2]", cityName);
-  const southEast = toBoundsPoint(value[3], "bounds[3]", cityName);
-
-  return [northWest, northEast, southWest, southEast];
+  return { north, south, east, west };
 };
 
 const toViewConfig = (
