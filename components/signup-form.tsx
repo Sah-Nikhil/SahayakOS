@@ -26,7 +26,7 @@ export function SignupForm({
 }: React.ComponentProps<"div">) {
   const router = useRouter()
   const convex = useConvex()
-  const { isLoaded, isSignedIn, getToken } = useAuth()
+  const { isSignedIn, getToken } = useAuth()
   const { fetchStatus, signUp } = useSignUp()
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
@@ -38,12 +38,6 @@ export function SignupForm({
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    if (isLoaded && isSignedIn) {
-      router.replace("/profile")
-    }
-  }, [isLoaded, isSignedIn, router])
 
   const finalizeSignup = async ({
     normalizedEmail,
@@ -58,13 +52,13 @@ export function SignupForm({
       throw new Error("Clerk is still loading. Please try again.")
     }
 
-    if (!signUp) {
-      throw new Error("Clerk is still loading. Please try again.")
-    }
-
     const { error: finalizeError } = await signUp.finalize()
     if (finalizeError) {
       throw finalizeError
+    }
+
+    if (!signUp.createdSessionId) {
+      throw new Error("Unable to activate the new session.")
     }
 
     await waitForConvexToken(getToken)
@@ -81,7 +75,7 @@ export function SignupForm({
         name: currentContext?.account?.name ?? normalizedName,
         phone: currentContext?.account?.phone ?? normalizedPhone,
       })
-    router.replace("/profile")
+    window.location.assign("/profile")
   }
 
   const handleResendCode = async () => {
@@ -125,7 +119,7 @@ export function SignupForm({
     const normalizedName = name.trim()
 
     if (isSignedIn) {
-      router.replace("/profile")
+      router.replace("/")
       return
     }
 

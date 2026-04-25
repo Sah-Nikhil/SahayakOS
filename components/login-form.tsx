@@ -18,21 +18,16 @@ import { Input } from "@/components/ui/input"
 
 export function LoginForm({
   className,
+  redirectUrl,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & { redirectUrl?: string }) {
   const router = useRouter()
-  const { isLoaded, isSignedIn } = useAuth()
+  const { isSignedIn } = useAuth()
   const { fetchStatus, signIn } = useSignIn()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
-
-  React.useEffect(() => {
-    if (isLoaded && isSignedIn) {
-      router.replace("/profile")
-    }
-  }, [isLoaded, isSignedIn, router])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -47,7 +42,7 @@ export function LoginForm({
     setIsSubmitting(true)
     try {
       if (isSignedIn) {
-        router.replace("/profile")
+        router.replace("/")
         return
       }
 
@@ -56,7 +51,7 @@ export function LoginForm({
         return
       }
 
-      const { error } = await signIn.create({
+      const { error } = await signIn.password({
         identifier: normalizedEmail,
         password: password.trim(),
       })
@@ -71,18 +66,17 @@ export function LoginForm({
         return
       }
 
-      const { error: finalizeError } = await signIn.finalize({
-        navigate: ({ decorateUrl }) => {
-          const destination = decorateUrl("/profile")
-          window.location.assign(destination)
-        },
-      })
+      const { error: finalizeError } = await signIn.finalize()
       if (finalizeError) {
         setError(finalizeError.message ?? "Unable to log in with those credentials.")
         return
       }
 
       setVolunteerSession({ email: normalizedEmail })
+
+      const destination = redirectUrl ?? "/profile"
+      window.location.assign(destination)
+
     } catch (error) {
       setError(error instanceof Error ? error.message : "Unable to login right now.")
     } finally {

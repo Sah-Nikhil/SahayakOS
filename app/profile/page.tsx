@@ -272,7 +272,7 @@ export default function ProfilePage() {
       })
 
       setIsSaving(false)
-      router.replace("/")
+      window.location.assign("/")
     } catch (error) {
       setIsSaving(false)
       setErrorMessage(error instanceof Error ? error.message : "Unable to save profile right now.")
