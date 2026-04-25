@@ -9,18 +9,6 @@ type NgoIdentity = {
   clerkUserId: string;
   email: string;
 };
-
-const normalizeEmail = (email: string) => email.trim().toLowerCase();
-
-<<<<<<< Updated upstream
-=======
-type NgoIdentity = {
-  tokenIdentifier: string;
-  clerkUserId: string;
-  email: string;
-};
-
->>>>>>> Stashed changes
 const redactPocDetails = (
   ngo: {
     pocDetails?: {
