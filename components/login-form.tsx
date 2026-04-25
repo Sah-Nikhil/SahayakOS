@@ -111,7 +111,12 @@ export function LoginForm({
               <Field>
                 <div className="flex items-center">
                   <FieldLabel htmlFor="password">Password</FieldLabel>
-                  <span className="ml-auto text-sm text-muted-foreground">Forgot your password?</span>
+                  <a
+                    href="/pwreset"
+                    className="ml-auto text-sm text-muted-foreground hover:underline"
+                  >
+                    Forgot your password?
+                  </a>
                 </div>
                 <Input
                   id="password"
