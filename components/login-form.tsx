@@ -149,11 +149,12 @@ export function LoginForm({
               </Field>
               {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
 
-              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
+              {/* <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
                 Or continue with
-              </FieldSeparator>
-              <Field className="grid grid-cols-3 gap-4">
-                {/* Google Login */}
+              </FieldSeparator> */}
+              {/* Google Login */}
+              {/* <Field className="grid grid-cols-3 gap-4">
+
                 <Button variant="outline" type="button" className="col-start-2" onClick={handleGoogleLogin}>
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="size-5 ">
                     <path
@@ -163,7 +164,7 @@ export function LoginForm({
                   </svg>
                   <span className="sr-only">Login with Google</span>
                 </Button>
-              </Field>
+              </Field> */}
               <FieldDescription className="text-center">
                 Don&apos;t have an account? <a href="/signup">Sign up</a>
               </FieldDescription>

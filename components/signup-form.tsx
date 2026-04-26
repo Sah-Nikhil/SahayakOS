@@ -360,11 +360,11 @@ export function SignupForm({
               <div id="clerk-captcha" />
               {message ? <FieldDescription className="text-foreground">{message}</FieldDescription> : null}
               {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
-              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
+              {/* <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
                 Or continue with
-              </FieldSeparator>
+              </FieldSeparator> */}
               {/* Google Sign Up */}
-              <Field className="grid grid-cols-3 gap-4">
+              {/* <Field className="grid grid-cols-3 gap-4">
                 <Button variant="outline" type="button" className="col-start-2" onClick={handleGoogleSignup}>
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="size-5 ">
                     <path
@@ -374,7 +374,7 @@ export function SignupForm({
                   </svg>
                   <span className="sr-only">Login with Google</span>
                 </Button>
-              </Field>
+              </Field> */}
               <FieldDescription className="text-center">
                 Already have an account? <a href="/login">Login</a>
               </FieldDescription>
