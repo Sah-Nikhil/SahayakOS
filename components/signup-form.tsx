@@ -3,7 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import { useConvex } from "convex/react"
-import { useAuth, useSignUp } from "@clerk/nextjs"
+import { useAuth, useSignUp, useSSO } from "@clerk/nextjs"
 
 import { api } from "@/convex/_generated/api"
 import { retryOnConvexNotAuthenticated, waitForConvexToken } from "@/lib/clerk-convex-auth"
@@ -28,6 +28,7 @@ export function SignupForm({
   const convex = useConvex()
   const { isSignedIn, getToken } = useAuth()
   const { fetchStatus, signUp } = useSignUp()
+  const { startSSOFlow } = useSSO()
   const [name, setName] = React.useState("")
   const [email, setEmail] = React.useState("")
   const [phone, setPhone] = React.useState("")
@@ -207,13 +208,16 @@ export function SignupForm({
   }
 
   const handleGoogleSignup = async () => {
-    if (!signUp) return
-
-    await signUp.sso({
-      strategy: "oauth_google",
-      redirectCallbackUrl: "/sso-callback",
-      redirectUrl: "/profile",
-    })
+    try {
+      await startSSOFlow({
+        strategy: "oauth_google",
+        redirectCallbackUrl: "/sso-callback",
+        redirectUrl: "/profile",
+      })
+    } catch (err) {
+      console.error("SSO Error:", err)
+      setError("Unable to start Google signup. Please try again.")
+    }
   }
 
   return (

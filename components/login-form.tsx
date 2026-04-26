@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import { useAuth, useSignIn } from "@clerk/nextjs"
+import { useAuth, useSignIn, useSSO } from "@clerk/nextjs"
 import { cn } from "@/lib/utils"
 import { setVolunteerSession } from "@/lib/volunteer-session"
 import { Button } from "@/components/ui/button"
@@ -24,6 +24,7 @@ export function LoginForm({
   const router = useRouter()
   const { isSignedIn } = useAuth()
   const { fetchStatus, signIn } = useSignIn()
+  const { startSSOFlow } = useSSO()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -85,13 +86,16 @@ export function LoginForm({
   }
 
   const handleGoogleLogin = async () => {
-    if (!signIn) return
-
-    await signIn.sso({
-      strategy: "oauth_google",
-      redirectCallbackUrl: "/sso-callback",
-      redirectUrl: "/",
-    })
+    try {
+      await startSSOFlow({
+        strategy: "oauth_google",
+        redirectCallbackUrl: "/sso-callback",
+        redirectUrl: "/",
+      })
+    } catch (err) {
+      console.error("SSO Error:", err)
+      setError("Unable to start Google login. Please try again.")
+    }
   }
 
   return (
