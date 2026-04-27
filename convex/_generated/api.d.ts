@@ -8,8 +8,8 @@
  * @module
  */
 
-import type * as jobListings from "../jobListings.js";
-import type * as ngos from "../ngos.js";
+import type * as mutations from "../mutations.js";
+import type * as queries from "../queries.js";
 import type * as volunteerAccounts from "../volunteerAccounts.js";
 import type * as volunteers from "../volunteers.js";
 
@@ -20,8 +20,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  jobListings: typeof jobListings;
-  ngos: typeof ngos;
+  mutations: typeof mutations;
+  queries: typeof queries;
   volunteerAccounts: typeof volunteerAccounts;
   volunteers: typeof volunteers;
 }>;

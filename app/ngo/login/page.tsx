@@ -1,106 +1,79 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useRouter } from "next/navigation"
-import { useAuth, useSignIn } from "@clerk/nextjs"
-import { useConvex } from "convex/react"
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { useAuth, useSignIn } from "@clerk/nextjs";
 
-import { api } from "@/convex/_generated/api"
-import { retryOnConvexNotAuthenticated, waitForConvexToken } from "@/lib/clerk-convex-auth"
-import { getNgoSession, setNgoSession } from "@/lib/ngo-session"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
   FieldSeparator,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
 export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div">) {
-  const router = useRouter()
-  const convex = useConvex()
-  const { isSignedIn, getToken } = useAuth()
-  const { fetchStatus, signIn } = useSignIn()
-  const [email, setEmail] = React.useState("")
-  const [password, setPassword] = React.useState("")
-  const [isSubmitting, setIsSubmitting] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
+  const router = useRouter();
+  const { isSignedIn } = useAuth();
+  const { isLoaded, signIn, setActive } = useSignIn();
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const finalizeNgoSession = async () => {
-    const currentNgo = await retryOnConvexNotAuthenticated(async () => {
-      return await convex.query(api.ngos.getCurrentNgoProfile, {})
-    })
-
-    if (!currentNgo) {
-      router.replace("/ngo/signup")
-      return
+  React.useEffect(() => {
+    if (isSignedIn) {
+      router.replace("/ngo");
     }
-
-    const currentSession = getNgoSession()
-    setNgoSession({
-      ngoId: currentNgo._id,
-      email: currentNgo.pocDetails?.email ?? currentSession.email,
-      name: currentNgo.ngoName,
-      phone: currentNgo.pocDetails?.phone ?? currentSession.phone,
-    })
-    router.replace("/ngo")
-  }
+  }, [isSignedIn, router]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setError(null)
+    event.preventDefault();
+    setError(null);
 
-    const normalizedEmail = email.trim().toLowerCase()
+    const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail || !password.trim()) {
-      setError("Please enter your email and password.")
-      return
+      setError("Please enter your email and password.");
+      return;
     }
 
-    setIsSubmitting(true)
+    if (isSignedIn) {
+      router.replace("/ngo");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      if (isSignedIn) {
-        await waitForConvexToken(getToken)
-        await finalizeNgoSession()
-        return
+      if (!isLoaded || !signIn || !setActive) {
+        setError("Clerk is still loading. Please try again.");
+        return;
       }
 
-      if (fetchStatus === "fetching" || !signIn) {
-        setError("Clerk is still loading. Please try again.")
-        return
-      }
-
-      const { error } = await signIn.password({
+      const result = await signIn.create({
         identifier: normalizedEmail,
         password: password.trim(),
-      })
+        strategy: "password",
+      });
 
-      if (error) {
-        setError(error.message ?? "Unable to log in with those credentials.")
-        return
+      if (result.status !== "complete") {
+        setError("Unable to log in with those credentials.");
+        return;
       }
 
-      if (signIn.status !== "complete" || !signIn.createdSessionId) {
-        setError("Unable to log in with those credentials.")
-        return
-      }
+      await setActive({ session: result.createdSessionId });
 
-      const { error: finalizeError } = await signIn.finalize()
-      if (finalizeError) {
-        setError(finalizeError.message ?? "Unable to log in with those credentials.")
-        return
-      }
-
-      await waitForConvexToken(getToken)
-      await finalizeNgoSession()
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Unable to log in right now.")
+      // After Clerk sign-in, redirect to dashboard.
+      router.replace("/ngo");
+    } catch (loginError) {
+      console.error("NGO login error:", loginError);
+      setError(loginError instanceof Error ? loginError.message : "Unable to log in right now.");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   return (
     <div className={className} {...props}>
@@ -125,9 +98,7 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
               </Field>
 
               <Field>
-                <div className="flex items-center">
-                  <FieldLabel htmlFor="password">Password</FieldLabel>
-                </div>
+                <FieldLabel htmlFor="password">Password</FieldLabel>
                 <Input
                   id="password"
                   type="password"
@@ -146,11 +117,11 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
               {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
 
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                Or continue with
+                New to the NGO portal?
               </FieldSeparator>
 
               <FieldDescription className="text-center">
-                Don&apos;t have an NGO account? <a href="/ngo/signup">Sign up</a>
+                <a href="/ngo/signup">Create an NGO account</a>
               </FieldDescription>
             </FieldGroup>
           </form>
@@ -169,7 +140,7 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
         <a href="#">Privacy Policy</a>.
       </FieldDescription>
     </div>
-  )
+  );
 }
 
 export default function NgoLoginPage() {
@@ -179,5 +150,5 @@ export default function NgoLoginPage() {
         <NgoLoginForm />
       </div>
     </div>
-  )
+  );
 }

@@ -7,17 +7,22 @@ const deviceValidator = v.union(
   v.literal("smartphone"),
 );
 
-const urgencyValidator = v.union(
+export const opportunityUrgencyValidator = v.union(
   v.literal("low"),
   v.literal("medium"),
   v.literal("high"),
-  v.literal("critical"),
 );
 
-const listingStatusValidator = v.union(
+export const opportunityStatusValidator = v.union(
   v.literal("open"),
   v.literal("filled"),
   v.literal("closed"),
+);
+
+export const opportunityLocationTypeValidator = v.union(
+  v.literal("hq"),
+  v.literal("field"),
+  v.literal("remote"),
 );
 
 const dayOfWeekValidator = v.union(
@@ -57,6 +62,27 @@ export const availabilityValidator = v.union(
     ),
   }),
 );
+
+export const ngoHqLocationValidator = v.object({
+  city: v.string(),
+  state: v.optional(v.string()),
+  country: v.string(),
+  lat: v.number(),
+  lng: v.number(),
+});
+
+export const opportunityLocationValidator = v.object({
+  type: opportunityLocationTypeValidator,
+  city: v.string(),
+  lat: v.number(),
+  lng: v.number(),
+});
+
+export const opportunityTimeWindowValidator = v.object({
+  start: v.number(),
+  end: v.number(),
+  durationHours: v.number(),
+});
 
 export default defineSchema({
   volunteers: defineTable({
@@ -99,39 +125,30 @@ export default defineSchema({
     .index("by_volunteerId", ["volunteerId"]),
 
   ngos: defineTable({
-    ownerTokenIdentifier: v.optional(v.string()),
-    clerkUserId: v.optional(v.string()),
-    ngoName: v.string(),
+    name: v.string(),
     registrationId: v.string(),
-    hqLocation: v.string(),
-    coverageArea: v.array(v.string()),
+    description: v.optional(v.string()),
+    hqLocation: ngoHqLocationValidator,
+    coverageAreas: v.array(v.string()),
     focusAreas: v.array(v.string()),
-    pocDetails: v.optional(
-      v.object({
-        name: v.string(),
-        email: v.string(),
-        phone: v.optional(v.string()),
-      }),
-    ),
-    isVerified: v.optional(v.boolean()),
-    reliabilityScore: v.optional(v.number()),
-    volunteerTreatmentScore: v.optional(v.number()),
-    averageRating: v.optional(v.number()),
+    createdBy: v.optional(v.id("volunteers")),
+    ownerTokenIdentifier: v.optional(v.string()),
+    createdAt: v.number(),
   })
-    .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"])
+    .index("by_name", ["name"])
+    .index("by_city", ["hqLocation.city"])
     .index("by_registrationId", ["registrationId"])
-    .index("by_pocDetails_email", ["pocDetails.email"])
-    .index("by_coverageArea", ["coverageArea"])
-    .index("by_isVerified", ["isVerified"]),
+    .index("by_createdBy", ["createdBy"])
+    .index("by_ownerTokenIdentifier", ["ownerTokenIdentifier"]),
 
-  jobListings: defineTable({
+  opportunities: defineTable({
     ngoId: v.id("ngos"),
     title: v.string(),
-    location: v.string(),
-    startDateTime: v.number(),
-    durationHours: v.number(),
+    description: v.string(),
+    location: opportunityLocationValidator,
+    timeWindow: opportunityTimeWindowValidator,
     taskType: v.string(),
-    urgency: urgencyValidator,
+    urgency: opportunityUrgencyValidator,
     requiredSkills: v.array(v.string()),
     skillPriorityMatrix: v.array(
       v.object({
@@ -140,13 +157,11 @@ export default defineSchema({
       }),
     ),
     volunteersRequired: v.number(),
-    volunteersAllocated: v.optional(v.number()),
-    status: listingStatusValidator,
-    description: v.optional(v.string()),
+    createdAt: v.number(),
+    status: opportunityStatusValidator,
   })
-    .index("by_ngoId", ["ngoId"])
+    .index("by_ngo", ["ngoId"])
+    .index("by_city", ["location.city"])
     .index("by_urgency", ["urgency"])
-    .index("by_status", ["status"])
-    .index("by_location", ["location"])
-    .index("by_status_and_urgency", ["status", "urgency"]),
+    .index("by_status", ["status"]),
 });

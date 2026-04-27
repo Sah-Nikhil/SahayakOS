@@ -61,7 +61,7 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
           </section>
         )}
       </section>
-      <NGOSidebar className="hidden xl:flex" />
+      <NGOSidebar cityName={selectedCityName} className="hidden xl:flex" />
     </main>
   );
 }

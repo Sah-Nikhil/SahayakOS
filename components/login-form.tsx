@@ -23,7 +23,7 @@ export function LoginForm({
 }: React.ComponentProps<"div"> & { redirectUrl?: string }) {
   const router = useRouter()
   const { isSignedIn } = useAuth()
-  const { fetchStatus, signIn } = useSignIn()
+  const { isLoaded, signIn, setActive } = useSignIn()
 
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
@@ -47,38 +47,31 @@ export function LoginForm({
         return
       }
 
-      if (fetchStatus === "fetching" || !signIn) {
+      if (!isLoaded || !signIn || !setActive) {
         setError("Clerk is still loading. Please try again.")
         return
       }
 
-      const { error } = await signIn.password({
+      const result = await signIn.create({
         identifier: normalizedEmail,
         password: password.trim(),
+        strategy: "password",
       })
 
-      if (error) {
-        setError(error.message ?? "Unable to log in with those credentials.")
-        return
-      }
-
-      if (signIn.status !== "complete" || !signIn.createdSessionId) {
+      if (result.status !== "complete") {
         setError("Unable to log in with those credentials.")
         return
       }
 
-      const { error: finalizeError } = await signIn.finalize()
-      if (finalizeError) {
-        setError(finalizeError.message ?? "Unable to log in with those credentials.")
-        return
-      }
+      await setActive({ session: result.createdSessionId })
 
       setVolunteerSession({ email: normalizedEmail })
 
-      const destination = redirectUrl ?? "/profile"
+      const destination = redirectUrl ?? "/"
       window.location.assign(destination)
 
     } catch (error) {
+      console.error("Login error:", error)
       setError(error instanceof Error ? error.message : "Unable to login right now.")
     } finally {
       setIsSubmitting(false)
@@ -167,6 +160,9 @@ export function LoginForm({
               </Field> */}
               <FieldDescription className="text-center">
                 Don&apos;t have an account? <a href="/signup">Sign up</a>
+              </FieldDescription>
+              <FieldDescription className="text-center text-xs">
+                Are you an NGO? <a href="/ngo/signup" className="underline">Sign up here</a>
               </FieldDescription>
             </FieldGroup>
           </form>
