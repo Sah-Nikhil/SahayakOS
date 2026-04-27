@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div">) {
   const router = useRouter();
   const { isSignedIn } = useAuth();
-  const { isLoaded, signIn, setActive } = useSignIn();
+  const { fetchStatus, signIn } = useSignIn();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -47,23 +47,27 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
 
     setIsSubmitting(true);
     try {
-      if (!isLoaded || !signIn || !setActive) {
+      if (fetchStatus === "fetching" || !signIn) {
         setError("Clerk is still loading. Please try again.");
         return;
       }
 
-      const result = await signIn.create({
-        identifier: normalizedEmail,
+      const { error } = await signIn.password({
+        emailAddress: normalizedEmail,
         password: password.trim(),
-        strategy: "password",
       });
 
-      if (result.status !== "complete") {
+      if (error) {
+        setError(error.message ?? "Unable to log in with those credentials.");
+        return;
+      }
+
+      if (signIn.status !== "complete" || !signIn.createdSessionId) {
         setError("Unable to log in with those credentials.");
         return;
       }
 
-      await setActive({ session: result.createdSessionId });
+      await signIn.finalize();
 
       // After Clerk sign-in, redirect to dashboard.
       router.replace("/ngo");

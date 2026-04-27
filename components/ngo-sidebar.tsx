@@ -23,6 +23,9 @@ type NgoWithOpportunities = Doc<"ngos"> & {
   opportunities: Doc<"opportunities">[];
 };
 
+type OpportunityStatus = "open" | "filled" | "closed";
+const volunteerOpportunityStatuses: OpportunityStatus[] = ["open", "filled"];
+
 const getLogoInitials = (name: string) => {
   const words = name.trim().split(/\s+/);
   if (words.length >= 2) {
@@ -83,16 +86,27 @@ function OpportunityCard({
   opportunity: Doc<"opportunities">;
   className?: string;
 }) {
+  const isFilled = opportunity.status === "filled";
+
   return (
     <article
       className={cn(
-        "rounded-2xl border border-border/50 bg-card/50 p-4 shadow-[6px_6px_20px] shadow-foreground/3 backdrop-blur-sm",
-        "transition-[transform,border-color,background-color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/30",
+        "rounded-2xl border p-4 shadow-[6px_6px_20px] backdrop-blur-sm transition-[transform,border-color,background-color,box-shadow] duration-200 ease-out hover:-translate-y-0.5",
+        isFilled
+          ? "border-amber-500/30 bg-amber-500/5 shadow-amber-950/5 hover:border-amber-500/40"
+          : "border-border/50 bg-card/50 shadow-foreground/3 hover:border-primary/30",
         className,
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <h4 className="text-lg font-semibold leading-tight text-foreground">{opportunity.title}</h4>
+        <div className="min-w-0">
+          <h4 className="text-lg font-semibold leading-tight text-foreground">{opportunity.title}</h4>
+          {isFilled ? (
+            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+              Filled role — kept visible for context
+            </p>
+          ) : null}
+        </div>
         <button
           type="button"
           className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 hover:text-foreground"
@@ -107,7 +121,12 @@ function OpportunityCard({
         <span>·</span>
         <span>{urgencyLabel(opportunity.urgency)}</span>
         <span>·</span>
-        <span>{opportunity.status}</span>
+        <Badge
+          variant={isFilled ? "secondary" : "outline"}
+          className={cn("h-6 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wide", isFilled ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "")}
+        >
+          {isFilled ? "Filled" : "Open"}
+        </Badge>
         <span>·</span>
         <span>{locationModeLabel(opportunity.location.type)}</span>
         <span>·</span>
@@ -159,6 +178,7 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
   const ngosWithOpportunities = useQuery(api.queries.getNGOsWithOpportunities, {
     city: cityName,
     taskType: selectedRole === "all" ? undefined : selectedRole,
+    statuses: volunteerOpportunityStatuses,
   });
   const [selectedNgoId, setSelectedNgoId] = useState<Id<"ngos"> | null>(null);
   const [searchQuery, setSearchQuery] = useState("");

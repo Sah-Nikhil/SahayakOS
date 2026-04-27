@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import {
+  opportunityDayOfWeekValidator,
   ngoHqLocationValidator,
   opportunityLocationValidator,
   opportunityStatusValidator,
@@ -116,6 +117,7 @@ export const createOpportunity = mutation({
     description: v.string(),
     location: opportunityLocationValidator,
     timeWindow: opportunityTimeWindowValidator,
+    days: v.optional(v.array(opportunityDayOfWeekValidator)),
     taskType: v.string(),
     urgency: opportunityUrgencyValidator,
     requiredSkills: v.array(v.string()),
@@ -138,18 +140,37 @@ export const createOpportunity = mutation({
       throw new Error("timeWindow.end must be greater than or equal to timeWindow.start.");
     }
 
+    const requiredSkills = normalizeStringArray(args.requiredSkills);
+    const requiredSkillSet = new Set(requiredSkills.map((skill) => skill.toLowerCase()));
+    const skillPriorityMatrix = args.skillPriorityMatrix
+      .map((entry) => ({
+        skill: entry.skill.trim(),
+        priority: entry.priority,
+      }))
+      .filter((entry) => entry.skill.length > 0);
+
+    if (requiredSkills.length === 0) {
+      throw new Error("Select at least one required skill.");
+    }
+
+    if (skillPriorityMatrix.length === 0) {
+      throw new Error("Select at least one skill priority.");
+    }
+
+    for (const entry of skillPriorityMatrix) {
+      if (!requiredSkillSet.has(entry.skill.toLowerCase())) {
+        throw new Error("Skill priority matrix can only include required skills.");
+      }
+    }
+
     return await ctx.db.insert("opportunities", {
       ...args,
       title: args.title.trim(),
       description: args.description.trim(),
       taskType: args.taskType.trim(),
-      requiredSkills: normalizeStringArray(args.requiredSkills),
-      skillPriorityMatrix: args.skillPriorityMatrix
-        .map((entry) => ({
-          skill: entry.skill.trim(),
-          priority: entry.priority,
-        }))
-        .filter((entry) => entry.skill.length > 0),
+      days: args.days && args.days.length > 0 ? args.days : undefined,
+      requiredSkills,
+      skillPriorityMatrix,
       createdAt: Date.now(),
     });
   },
@@ -168,5 +189,30 @@ export const updateOpportunityStatus = mutation({
 
     await ctx.db.patch(args.opportunityId, { status: args.status });
     return await ctx.db.get(args.opportunityId);
+  },
+});
+
+export const deleteOpportunity = mutation({
+  args: {
+    opportunityId: v.id("opportunities"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await requireOwnerIdentity(ctx);
+    const existingOpportunity = await ctx.db.get(args.opportunityId);
+    if (!existingOpportunity) {
+      throw new Error("Opportunity not found.");
+    }
+
+    const ngo = await ctx.db.get(existingOpportunity.ngoId);
+    if (!ngo) {
+      throw new Error("NGO not found.");
+    }
+
+    if (ngo.ownerTokenIdentifier !== identity.tokenIdentifier) {
+      throw new Error("You do not own this NGO.");
+    }
+
+    await ctx.db.delete(args.opportunityId);
+    return args.opportunityId;
   },
 });

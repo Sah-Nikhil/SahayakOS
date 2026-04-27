@@ -35,6 +35,8 @@ const dayOfWeekValidator = v.union(
   v.literal("saturday"),
 );
 
+export const opportunityDayOfWeekValidator = dayOfWeekValidator;
+
 const timeSlotValidator = v.object({
   start: v.string(), // "HH:MM" 24h format
   end: v.string(),   // "HH:MM" 24h format
@@ -147,6 +149,7 @@ export default defineSchema({
     description: v.string(),
     location: opportunityLocationValidator,
     timeWindow: opportunityTimeWindowValidator,
+    days: v.optional(v.array(dayOfWeekValidator)),
     taskType: v.string(),
     urgency: opportunityUrgencyValidator,
     requiredSkills: v.array(v.string()),

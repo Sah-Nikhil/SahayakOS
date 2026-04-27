@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query, type QueryCtx } from "./_generated/server";
-import { opportunityUrgencyValidator } from "./schema";
+import { opportunityStatusValidator, opportunityUrgencyValidator } from "./schema";
 import type { Doc } from "./_generated/dataModel";
 
 const mapFilterArgs = {
@@ -8,6 +8,7 @@ const mapFilterArgs = {
   urgency: v.optional(opportunityUrgencyValidator),
   skill: v.optional(v.string()),
   taskType: v.optional(v.string()),
+  statuses: v.optional(v.array(opportunityStatusValidator)),
 };
 
 const normalizeSkill = (value: string) => value.trim().toLowerCase();
@@ -19,13 +20,19 @@ const filterOpportunities = (
     urgency?: "low" | "medium" | "high";
     skill?: string;
     taskType?: string;
+    statuses?: Array<"open" | "filled" | "closed">;
   },
 ) => {
   const normalizedCity = filters.city?.trim().toLowerCase();
   const normalizedSkill = filters.skill?.trim().toLowerCase();
   const normalizedTaskType = filters.taskType?.trim().toLowerCase();
+  const allowedStatuses = filters.statuses ? new Set(filters.statuses) : null;
 
   return opportunities.filter((opportunity) => {
+    if (allowedStatuses && !allowedStatuses.has(opportunity.status)) {
+      return false;
+    }
+
     if (normalizedCity && opportunity.location.city.trim().toLowerCase() !== normalizedCity) {
       return false;
     }
@@ -51,6 +58,37 @@ const filterOpportunities = (
   });
 };
 
+const getNgoRowsFromOpportunities = async (
+  ctx: QueryCtx,
+  opportunities: Doc<"opportunities">[],
+) => {
+  const ngoIds = [...new Set(opportunities.map((opportunity) => opportunity.ngoId))];
+  const ngos = await Promise.all(ngoIds.map((ngoId) => ctx.db.get(ngoId)));
+  const ngoOpportunities = new Map<Doc<"ngos">["_id"], Doc<"opportunities">[]>();
+
+  for (const opportunity of opportunities) {
+    const existing = ngoOpportunities.get(opportunity.ngoId);
+    if (existing) {
+      existing.push(opportunity);
+    } else {
+      ngoOpportunities.set(opportunity.ngoId, [opportunity]);
+    }
+  }
+
+  return ngos.flatMap((ngo) => {
+    if (!ngo) {
+      return [];
+    }
+
+    return [
+      {
+        ...ngo,
+        opportunities: ngoOpportunities.get(ngo._id) ?? [],
+      },
+    ];
+  });
+};
+
 const getNgosWithFilteredOpportunities = async (
   ctx: QueryCtx,
   filters: {
@@ -58,17 +96,18 @@ const getNgosWithFilteredOpportunities = async (
     urgency?: "low" | "medium" | "high";
     skill?: string;
     taskType?: string;
+    statuses?: Array<"open" | "filled" | "closed">;
   },
 ) => {
-  const normalizedCity = filters.city?.trim().toLowerCase();
-  
   let ngos;
   if (filters.city) {
-    // If we have a city filter, use the index to find NGOs in that city
-    ngos = await ctx.db
-      .query("ngos")
-      .withIndex("by_city", (q) => q.eq("hqLocation.city", filters.city!))
-      .take(100);
+    const opportunities = await ctx.db
+      .query("opportunities")
+      .withIndex("by_city", (q) => q.eq("location.city", filters.city!.trim()))
+      .take(200);
+    const filteredOpportunities = filterOpportunities(opportunities, filters);
+
+    return await getNgoRowsFromOpportunities(ctx, filteredOpportunities);
   } else {
     ngos = await ctx.db.query("ngos").withIndex("by_name").take(100);
   }

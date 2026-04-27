@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div">) {
   const router = useRouter();
   const { isSignedIn } = useAuth();
-  const { isLoaded, signUp, setActive } = useSignUp();
+  const { fetchStatus, signUp } = useSignUp();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -29,7 +29,7 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
   const [error, setError] = React.useState<string | null>(null);
 
   const finalizeSignup = async () => {
-    if (!isLoaded || !signUp || !setActive) {
+    if (fetchStatus === "fetching" || !signUp) {
       throw new Error("Clerk is still loading. Please try again.");
     }
 
@@ -37,7 +37,7 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
       throw new Error("Signup is not complete.");
     }
 
-    await setActive({ session: signUp.createdSessionId });
+    await signUp.finalize();
 
     // After Clerk signup, redirect to profile creation.
     router.replace("/ngo/profile");
@@ -47,14 +47,18 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
     setError(null);
     setMessage(null);
 
-    if (!isLoaded || !signUp) {
+    if (fetchStatus === "fetching" || !signUp) {
       setError("Clerk is still loading. Please try again.");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+      const { error } = await signUp.verifications.sendEmailCode();
+      if (error) {
+        setError(error.message ?? "Unable to send a new verification code right now.");
+        return;
+      }
       setMessage(`A new verification code was sent to ${signUp.emailAddress ?? email.trim().toLowerCase()}.`);
     } catch (submitError) {
       console.error("Resend code error:", submitError);
@@ -78,7 +82,7 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
       return;
     }
 
-    if (!isLoaded || !signUp) {
+    if (fetchStatus === "fetching" || !signUp) {
       setError("Clerk is still loading. Please try again.");
       return;
     }
@@ -91,11 +95,18 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
 
       setIsSubmitting(true);
       try {
-        const result = await signUp.attemptEmailAddressVerification({
+        const { error: verificationError } = await signUp.verifications.verifyEmailCode({
           code: verificationCode.trim(),
         });
 
-        if (result.status !== "complete") {
+        if (verificationError) {
+          setError(
+            verificationError.message ?? "Unable to verify the code. Please check the code and try again.",
+          );
+          return;
+        }
+
+        if (signUp.status !== "complete" || !signUp.createdSessionId) {
           setError("Email verification is still pending. Please check the code and try again.");
           return;
         }
@@ -124,12 +135,26 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
 
     setIsSubmitting(true);
     try {
-      await signUp.create({
+      const { error } = await signUp.password({
         emailAddress: normalizedEmail,
         password,
       });
 
-      await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+      if (error) {
+        setError(error.message ?? "Unable to continue right now.");
+        return;
+      }
+
+      if (signUp.status === "complete" && signUp.createdSessionId) {
+        await finalizeSignup();
+        return;
+      }
+
+      const { error: sendCodeError } = await signUp.verifications.sendEmailCode();
+      if (sendCodeError) {
+        setError(sendCodeError.message ?? "Unable to send a verification code right now.");
+        return;
+      }
 
       setAwaitingEmailVerification(true);
       setMessage(`We sent a verification code to ${normalizedEmail}. Enter it below to finish sign up.`);

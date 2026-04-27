@@ -16,8 +16,8 @@ const CLEAN_LIGHT_LABELS_TILE_URL =
 const CLEAN_LIGHT_TILE_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
-// Leaflet zoom levels are logarithmic, so a 1.09x scale change is roughly 9%.
-const ZOOM_SCALE_STEP = 1.09;
+// Leaflet zoom levels are logarithmic, so a 1.60x scale change is roughly 9%.
+const ZOOM_SCALE_STEP = 1.60;
 const ZOOM_STEP = Math.log2(ZOOM_SCALE_STEP);
 
 // Tweak these values if you want to experiment with how far the map opens.
@@ -49,6 +49,7 @@ export type CityMapProps = {
   heightClassName?: string;
   className?: string;
   onMarkerClick?: (ngoId: Id<"ngos">) => void;
+  opportunityStatuses?: Array<"open" | "filled" | "closed">;
 };
 
 const getInitialZoom = (map: LeafletMap, overrideZoom?: number) => {
@@ -97,12 +98,18 @@ export function CityMap({
   heightClassName,
   className,
   onMarkerClick,
+  opportunityStatuses,
 }: CityMapProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markersLayerRef = useRef<LayerGroup | null>(null);
 
-  const mapData = useQuery(api.queries.getMapData, { city: cityName });
+  const mapData = useQuery(
+    api.queries.getMapData,
+    opportunityStatuses
+      ? { city: cityName, statuses: opportunityStatuses }
+      : { city: cityName },
+  );
 
   const mapCenter = useMemo<LatLngExpression>(
     () => [center.latitude, center.longitude],
