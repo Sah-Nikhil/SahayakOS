@@ -24,34 +24,39 @@ A volunteer coordination platform that connects NGOs with qualified volunteers f
 ## Architecture
 
 ```mermaid
-flowchart LR
-  User[Volunteer / NGO Rep] --> App[Next.js 16<br/>App Router]
-  App --> Pages[Route pages]
-  Pages --> Components[Reusable React Components]
-  Components --> VolunteerUI[Volunteer map<br/>+ NGO sidebar]
-  Components --> NgoUI[NGO dashboard]
-  VolunteerUI --> Leaflet[Leaflet map]
-  NgoUI --> Leaflet
-  VolunteerUI --> ApplyUI[Apply to<br/>opportunity]
-  NgoUI --> ReviewUI[Approve / deny<br/>applications]
+flowchart TB
+  User["Volunteer / NGO Rep"] --> App["Next.js 16\nApp Router"]
 
-  App --> Layout[Root layout]
-  Layout --> Clerk[ClerkProvider]
-  Layout --> ConvexProvider[ConvexClientProvider]
+  subgraph Frontend["Frontend"]
+    direction TB
+    App --> Pages["Route pages"]
+    Pages --> Components["Reusable React\ncomponents"]
+    Components --> VolunteerUI["Volunteer map\n+ NGO sidebar"]
+    Components --> NgoUI["NGO dashboard"]
+    VolunteerUI --> Leaflet["Leaflet map"]
+    NgoUI --> Leaflet
+    VolunteerUI --> ApplyUI["Apply to\nopportunity"]
+    NgoUI --> ReviewUI["Approve / deny\napplications"]
+  end
 
-  Clerk --> Auth[Clerk auth<br/>+ token mapping]
-  ConvexProvider --> API[Convex queries<br/>/ mutations]
-  API --> Schema[Schema + indexes<br/>+ application workflow]
-  Schema --> DB[(Convex database)]
-  Schema --> Applications[(opportunityApplications<br/>table)]
-  ApplyUI --> API
-  ReviewUI --> API
+  subgraph Platform["Platform"]
+    direction TB
+    App --> Layout["Root layout"]
+    Layout --> Clerk["ClerkProvider"]
+    Layout --> ConvexProvider["ConvexClientProvider"]
+    Clerk --> Auth["Clerk auth\n+ token mapping"]
+    ConvexProvider --> API["Convex queries\n/ mutations"]
+    API --> Schema["Schema + indexes\n+ application workflow"]
+    Schema --> DB[(Convex database)]
+    Schema --> Applications[(opportunityApplications\ntable)]
+    ApplyUI --> API
+    ReviewUI --> API
+    Auth --> API
+    Env["Env vars:\nNEXT_PUBLIC_CONVEX_URL,\nClerk keys"] --> Layout
+    Env --> Auth
+  end
 
-  Auth --> API
-  Env[Env vars: NEXT_PUBLIC_CONVEX_URL, Clerk keys] --> Layout
-  Env --> Auth
-
-  Analytics[Vercel Analytics] -. usage .-> App
+  Analytics["Vercel Analytics"] -. usage .-> App
 ```
 
 ## Key Routes
@@ -72,32 +77,37 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-  Start[Visit SahayakOS] --> Home[Home city map]
-  Home --> Choice{User type?}
-  Choice -->|Volunteer| VolunteerAuth[/Login or<br/>Signup/]
-  Choice -->|NGO| NgoAuth[/Login or<br/>Signup/]
+  Start["Visit SahayakOS"] --> Home["Home city map"]
+  Home --> Choice{"User type?"}
+  Choice -->|Volunteer| VolunteerAuth["Login or\nSignup"]
+  Choice -->|NGO| NgoAuth["Login or\nSignup"]
 
-  VolunteerAuth --> ClerkVolunteer[Clerk sign-in]
-  ClerkVolunteer --> VolunteerProfile[Complete volunteer profile]
-  VolunteerProfile --> VolunteerHome[Volunteer map<br/>dashboard]
-  VolunteerHome --> BrowseRoles[Browse NGO<br/>opportunities]
-  BrowseRoles --> ApplyRole[Apply to<br/>opportunity]
+  subgraph VolunteerFlow["Volunteer flow"]
+    direction TB
+    VolunteerAuth --> ClerkVolunteer["Clerk sign-in"]
+    ClerkVolunteer --> VolunteerProfile["Complete volunteer profile"]
+    VolunteerProfile --> VolunteerHome["Volunteer map\ndashboard"]
+    VolunteerHome --> BrowseRoles["Browse NGO\nopportunities"]
+    BrowseRoles --> ApplyRole["Apply to\nopportunity"]
+  end
 
-  NgoAuth --> ClerkNgo[Clerk sign-in]
-  ClerkNgo --> NgoProfile[Complete NGO profile]
-  NgoProfile --> NgoDashboard[NGO dashboard]
-  NgoDashboard --> Opportunities[Create / manage<br/>opportunities]
-  NgoDashboard --> ReviewApps[Review volunteer<br/>applications]
-  ReviewApps --> Decision{Approve or deny?}
-  Decision -->|Approve| Approved[Volunteer<br/>approved]
-  Decision -->|Deny| Denied[Volunteer denied]
+  subgraph NgoFlow["NGO flow"]
+    direction TB
+    NgoAuth --> ClerkNgo["Clerk sign-in"]
+    ClerkNgo --> NgoProfile["Complete NGO profile"]
+    NgoProfile --> NgoDashboard["NGO dashboard"]
+    NgoDashboard --> Opportunities["Create / manage\nopportunities"]
+    NgoDashboard --> ReviewApps["Review volunteer\napplications"]
+    ReviewApps --> Decision{"Approve or deny?"}
+    Decision -->|Approve| Approved["Volunteer\napproved"]
+    Decision -->|Deny| Denied["Volunteer denied"]
+  end
 
-  VolunteerHome --> Convex[Convex data]
-  ApplyRole --> Convex
-  NgoDashboard --> Convex
-  ReviewApps --> Convex
+  ApplyRole --> Convex["Convex data"]
   Opportunities --> Convex
-  Convex --> StatusSync[Status reflected in both dashboards]
+  ReviewApps --> Convex
+  VolunteerHome --> Convex
+  Convex --> StatusSync["Status reflected\nin both dashboards"]
 ```
 
 ## Quick Start
