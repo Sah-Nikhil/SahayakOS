@@ -12,6 +12,52 @@ A volunteer coordination platform that connects NGOs with qualified volunteers f
 - Convex-backed data models for volunteers, NGOs, accounts, and opportunities
 - Clerk authentication synced with Convex session data
 
+## Wireframe
+
+```mermaid
+flowchart TB
+  Start["SahayakOS"]
+  Start --> Home["/ Home city map"]
+
+  subgraph VolunteerHome["Home page layout"]
+    direction TB
+    VH1["City tabs"]
+    VH2["Interactive map"]
+    VH3["NGO sidebar\nsearch · filters · opportunities"]
+    VH1 --> VH2 --> VH3
+  end
+
+  Home --> VolunteerHome
+  Home --> VolunteerAuth["Volunteer auth"]
+  VolunteerAuth --> VLogin["/login"]
+  VolunteerAuth --> VSignup["/signup"]
+  VLogin --> VProfile["/profile"]
+  VSignup --> VProfile
+  VProfile --> Home
+  Home --> VReset["/pwreset"]
+
+  Home --> Opportunities["/opportunities\npublic opportunity browser"]
+  Opportunities --> OpportunitiesList["Search · cards · apply flow"]
+
+  Home --> NgoAuth["NGO portal"]
+  NgoAuth --> NgoLogin["/ngo/login"]
+  NgoAuth --> NgoSignup["/ngo/signup"]
+  NgoLogin --> NgoProfile["/ngo/profile"]
+  NgoSignup --> NgoProfile
+  NgoProfile --> NgoDashboard["/ngo dashboard"]
+
+  subgraph NgoDashboardLayout["NGO dashboard layout"]
+    direction TB
+    ND1["Header: dashboard + profile/logout"]
+    ND2["Opportunity form"]
+    ND3["Opportunity list"]
+    ND4["Application review queue"]
+    ND1 --> ND2 --> ND3 --> ND4
+  end
+
+  NgoDashboard --> NgoDashboardLayout
+```
+
 ## Tech Stack
 
 - **Frontend**: [Next.js](https://nextjs.org) 16.2+ with React 19, TypeScript
