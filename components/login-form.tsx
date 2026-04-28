@@ -144,6 +144,7 @@ export function LoginForm({
                   {isSubmitting ? "Logging in..." : "Login"}
                 </Button>
               </Field>
+              <div id="clerk-captcha" />
               {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
 
               {/* <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
