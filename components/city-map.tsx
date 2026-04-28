@@ -16,7 +16,7 @@ const CLEAN_LIGHT_LABELS_TILE_URL =
 const CLEAN_LIGHT_TILE_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
-// Leaflet zoom levels are logarithmic, so a 1.60x scale change is roughly 9%.
+// Leaflet zoom levels are logarithmic, so a 1.60x scale change is roughly 60%.
 const ZOOM_SCALE_STEP = 1.60;
 const ZOOM_STEP = Math.log2(ZOOM_SCALE_STEP);
 
