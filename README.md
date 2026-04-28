@@ -8,6 +8,7 @@ A volunteer coordination platform that connects NGOs with qualified volunteers f
 - NGO signup, login, profile management, and dashboard flows
 - A city-based volunteer map on the home page
 - An NGO opportunity map with city, skill, and urgency filters
+- Volunteer-to-opportunity applications with NGO approval/denial workflow
 - Convex-backed data models for volunteers, NGOs, accounts, and opportunities
 - Clerk authentication synced with Convex session data
 
@@ -27,8 +28,12 @@ flowchart LR
   User[Volunteer / NGO Rep] --> App[Next.js 16 App Router]
   App --> Pages[Route pages]
   Pages --> Components[Reusable React Components]
-  Components --> Dashboard[City Map Dashboard]
-  Dashboard --> Leaflet[Leaflet map]
+  Components --> VolunteerUI[Volunteer map + NGO sidebar]
+  Components --> NgoUI[NGO dashboard]
+  VolunteerUI --> Leaflet[Leaflet map]
+  NgoUI --> Leaflet
+  VolunteerUI --> ApplyUI[Apply to opportunity UI]
+  NgoUI --> ReviewUI[Approve / deny UI]
 
   App --> Layout[Root layout]
   Layout --> Clerk[ClerkProvider]
@@ -36,8 +41,11 @@ flowchart LR
 
   Clerk --> Auth[Clerk auth + token mapping]
   ConvexProvider --> API[Convex queries / mutations]
-  API --> Schema[Schema + indexes]
+  API --> Schema[Schema + indexes + application workflow]
   Schema --> DB[(Convex database)]
+  Schema --> Applications[(opportunityApplications table)]
+  ApplyUI --> API
+  ReviewUI --> API
 
   Auth --> API
   Env[Env vars: NEXT_PUBLIC_CONVEX_URL, Clerk keys] --> Layout
@@ -72,15 +80,24 @@ flowchart TD
   VolunteerAuth --> ClerkVolunteer[Clerk sign-in]
   ClerkVolunteer --> VolunteerProfile[Complete volunteer profile]
   VolunteerProfile --> VolunteerHome[Volunteer map dashboard]
+  VolunteerHome --> BrowseRoles[Browse NGO opportunities]
+  BrowseRoles --> ApplyRole[Apply to opportunity]
 
   NgoAuth --> ClerkNgo[Clerk sign-in]
   ClerkNgo --> NgoProfile[Complete NGO profile]
   NgoProfile --> NgoDashboard[NGO dashboard]
   NgoDashboard --> Opportunities[Create / manage opportunities]
+  NgoDashboard --> ReviewApps[Review volunteer applications]
+  ReviewApps --> Decision{Approve or deny?}
+  Decision -->|Approve| Approved[Volunteer approved]
+  Decision -->|Deny| Denied[Volunteer denied]
 
   VolunteerHome --> Convex[Convex data]
+  ApplyRole --> Convex
   NgoDashboard --> Convex
+  ReviewApps --> Convex
   Opportunities --> Convex
+  Convex --> StatusSync[Application status reflected to both dashboards]
 ```
 
 ## Quick Start
@@ -188,6 +205,7 @@ The app will auto-reload as you make changes.
 - **volunteerAccounts**: Clerk-to-Convex account mapping for signed-in volunteers
 - **ngos**: organization details, headquarters, coverage areas, and ownership metadata
 - **opportunities**: NGO-created opportunities with urgency, skills, time window, and status
+- **opportunityApplications**: volunteer applications to opportunities with pending/approved/denied review states
 
 ## Authentication Flow
 

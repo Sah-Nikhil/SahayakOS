@@ -149,6 +149,35 @@ const getNgosWithFilteredOpportunities = async (
     : ngoRows.filter((ngo) => ngo.opportunities.length > 0);
 };
 
+const getCurrentVolunteerContext = async (ctx: QueryCtx) => {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    return null;
+  }
+
+  const account = await ctx.db
+    .query("volunteerAccounts")
+    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+    .unique();
+
+  if (!account) {
+    return null;
+  }
+
+  const volunteer =
+    (account.volunteerId ? await ctx.db.get(account.volunteerId) : null) ??
+    (await ctx.db
+      .query("volunteers")
+      .withIndex("by_volunteerAccountId", (q) => q.eq("volunteerAccountId", account._id))
+      .unique());
+
+  if (!volunteer) {
+    return null;
+  }
+
+  return { account, volunteer };
+};
+
 export const getNGOsWithOpportunities = query({
   args: mapFilterArgs,
   handler: async (ctx, args) => {
@@ -245,5 +274,106 @@ export const getMapData = query({
       lng: ngo.hqLocation.lng,
       opportunitiesCount: ngo.opportunities.length,
     }));
+  },
+});
+
+export const getMyOpportunityApplications = query({
+  args: {},
+  handler: async (ctx) => {
+    const volunteerContext = await getCurrentVolunteerContext(ctx);
+    if (!volunteerContext) {
+      return [];
+    }
+
+    const applications = await ctx.db
+      .query("opportunityApplications")
+      .withIndex("by_volunteer", (q) => q.eq("volunteerId", volunteerContext.volunteer._id))
+      .take(500);
+
+    return applications
+      .sort((a, b) => b.appliedAt - a.appliedAt)
+      .map((application) => ({
+        _id: application._id,
+        opportunityId: application.opportunityId,
+        status: application.status,
+        appliedAt: application.appliedAt,
+        reviewedAt: application.reviewedAt,
+      }));
+  },
+});
+
+export const getOpportunityApplicationsForOwnedNgo = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+
+    const ngo = await ctx.db
+      .query("ngos")
+      .withIndex("by_ownerTokenIdentifier", (q) =>
+        q.eq("ownerTokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+
+    if (!ngo) {
+      return [];
+    }
+
+    const applications = await ctx.db
+      .query("opportunityApplications")
+      .withIndex("by_ngo", (q) => q.eq("ngoId", ngo._id))
+      .take(500);
+
+    const hydratedApplications = await Promise.all(
+      applications.map(async (application) => {
+        const volunteer = await ctx.db.get(application.volunteerId);
+        const opportunity = await ctx.db.get(application.opportunityId);
+
+        if (!volunteer || !opportunity) {
+          return null;
+        }
+
+        return {
+          _id: application._id,
+          opportunityId: application.opportunityId,
+          status: application.status,
+          appliedAt: application.appliedAt,
+          reviewedAt: application.reviewedAt,
+          opportunity: {
+            _id: opportunity._id,
+            title: opportunity.title,
+            status: opportunity.status,
+            urgency: opportunity.urgency,
+            taskType: opportunity.taskType,
+            location: opportunity.location,
+          },
+          volunteer: {
+            _id: volunteer._id,
+            name: volunteer.name,
+            location: volunteer.location,
+            skills: volunteer.skills,
+            contactDetails: volunteer.contactDetails,
+          },
+        };
+      }),
+    );
+
+    const statusPriority: Record<Doc<"opportunityApplications">["status"], number> = {
+      pending: 0,
+      approved: 1,
+      denied: 2,
+    };
+
+    return hydratedApplications
+      .flatMap((application) => (application ? [application] : []))
+      .sort((a, b) => {
+        const byStatus = statusPriority[a.status] - statusPriority[b.status];
+        if (byStatus !== 0) {
+          return byStatus;
+        }
+        return b.appliedAt - a.appliedAt;
+      });
   },
 });

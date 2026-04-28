@@ -19,6 +19,12 @@ export const opportunityStatusValidator = v.union(
   v.literal("closed"),
 );
 
+export const opportunityApplicationStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("approved"),
+  v.literal("denied"),
+);
+
 export const opportunityLocationTypeValidator = v.union(
   v.literal("hq"),
   v.literal("field"),
@@ -167,4 +173,21 @@ export default defineSchema({
     .index("by_city", ["location.city"])
     .index("by_urgency", ["urgency"])
     .index("by_status", ["status"]),
+
+  opportunityApplications: defineTable({
+    opportunityId: v.id("opportunities"),
+    ngoId: v.id("ngos"),
+    volunteerId: v.id("volunteers"),
+    volunteerAccountId: v.id("volunteerAccounts"),
+    status: opportunityApplicationStatusValidator,
+    appliedAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+    reviewedByTokenIdentifier: v.optional(v.string()),
+  })
+    .index("by_opportunity", ["opportunityId"])
+    .index("by_ngo", ["ngoId"])
+    .index("by_ngo_and_status", ["ngoId", "status"])
+    .index("by_volunteer", ["volunteerId"])
+    .index("by_volunteer_and_opportunity", ["volunteerId", "opportunityId"])
+    .index("by_opportunity_and_status", ["opportunityId", "status"]),
 });

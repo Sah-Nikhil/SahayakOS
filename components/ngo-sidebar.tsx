@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 import type { PublicNgoWithOpportunities } from "@/convex/queries";
 import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SingleSelect, type SingleSelectOption } from "@/components/ui/single-select";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ import {
 type NgoWithOpportunities = PublicNgoWithOpportunities;
 
 type OpportunityStatus = "open" | "filled" | "closed";
+type OpportunityApplicationStatus = "pending" | "approved" | "denied";
 const volunteerOpportunityStatuses: OpportunityStatus[] = ["open", "filled"];
 
 const getLogoInitials = (name: string) => {
@@ -79,12 +81,26 @@ const locationModeLabel = (type: string) => {
 
 function OpportunityCard({
   opportunity,
+  applicationStatus,
+  canApply,
+  isApplying,
+  onApply,
   className,
 }: {
   opportunity: Doc<"opportunities">;
+  applicationStatus?: OpportunityApplicationStatus;
+  canApply: boolean;
+  isApplying: boolean;
+  onApply: (opportunity: Doc<"opportunities">) => void;
   className?: string;
 }) {
   const isFilled = opportunity.status === "filled";
+  const isApplyDisabled = !canApply || opportunity.status !== "open" || Boolean(applicationStatus);
+  const applicationLabel: Record<OpportunityApplicationStatus, string> = {
+    pending: "Application pending",
+    approved: "Approved by NGO",
+    denied: "Denied by NGO",
+  };
 
   return (
     <article
@@ -149,6 +165,29 @@ function OpportunityCard({
           <span className="text-xs text-muted-foreground">+{opportunity.requiredSkills.length - 4} more</span>
         ) : null}
       </div>
+
+      <div className="mt-4">
+        {!canApply ? (
+          <Link href="/profile" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+            Complete profile to apply
+          </Link>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            disabled={isApplyDisabled || isApplying}
+            onClick={() => onApply(opportunity)}
+          >
+            {isApplying
+              ? "Applying..."
+              : applicationStatus
+                ? applicationLabel[applicationStatus]
+                : opportunity.status !== "open"
+                  ? "Role filled"
+                  : "Apply to this role"}
+          </Button>
+        )}
+      </div>
     </article>
   );
 }
@@ -180,11 +219,17 @@ export function NGOSidebar({
   onSelectedNgoIdChange,
 }: NGOSidebarProps) {
   const [selectedRole, setSelectedRole] = useState("all");
+  const [pendingOpportunityId, setPendingOpportunityId] = useState<Id<"opportunities"> | null>(null);
+  const [applyFeedback, setApplyFeedback] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const ngosWithOpportunities = useQuery(api.queries.getNGOsWithOpportunities, {
     city: cityName,
     taskType: selectedRole === "all" ? undefined : selectedRole,
     statuses: volunteerOpportunityStatuses,
   });
+  const volunteerContext = useQuery(api.volunteerAccounts.getCurrentVolunteerContext);
+  const myApplications = useQuery(api.queries.getMyOpportunityApplications);
+  const applyToOpportunity = useMutation(api.mutations.applyToOpportunity);
   const [internalSelectedNgoId, setInternalSelectedNgoId] = useState<Id<"ngos"> | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const isExternallyControlled = externallySelectedNgoId !== undefined;
@@ -216,6 +261,34 @@ export function NGOSidebar({
   );
 
   const isLoading = ngosWithOpportunities === undefined;
+  const canApply = Boolean(volunteerContext?.volunteer);
+  const applicationsByOpportunityId = useMemo(() => {
+    const byOpportunity = new Map<Id<"opportunities">, OpportunityApplicationStatus>();
+    for (const application of myApplications ?? []) {
+      byOpportunity.set(application.opportunityId, application.status);
+    }
+    return byOpportunity;
+  }, [myApplications]);
+
+  const handleApply = async (opportunity: Doc<"opportunities">) => {
+    setApplyError(null);
+    setApplyFeedback(null);
+    setPendingOpportunityId(opportunity._id);
+    try {
+      const result = await applyToOpportunity({ opportunityId: opportunity._id });
+      setApplyFeedback(
+        result.created
+          ? `Application sent for "${opportunity.title}".`
+          : `You already applied for "${opportunity.title}".`,
+      );
+    } catch (error) {
+      setApplyError(
+        error instanceof Error ? error.message : "Unable to submit your application right now.",
+      );
+    } finally {
+      setPendingOpportunityId((current) => (current === opportunity._id ? null : current));
+    }
+  };
 
   return (
     <aside
@@ -291,6 +364,14 @@ export function NGOSidebar({
             </span>
           </div>
 
+          {!canApply ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Complete your volunteer profile before applying to opportunities.
+            </p>
+          ) : null}
+          {applyFeedback ? <p className="mt-3 text-xs text-primary">{applyFeedback}</p> : null}
+          {applyError ? <p className="mt-3 text-xs text-destructive">{applyError}</p> : null}
+
           <div className="mt-3 space-y-3 pb-5">
             {selectedNgo.opportunities.length === 0 ? (
               <p className="text-sm text-muted-foreground">No opportunities listed yet.</p>
@@ -299,6 +380,10 @@ export function NGOSidebar({
                 <OpportunityCard
                   key={opportunity._id}
                   opportunity={opportunity}
+                  applicationStatus={applicationsByOpportunityId.get(opportunity._id)}
+                  canApply={canApply}
+                  isApplying={pendingOpportunityId === opportunity._id}
+                  onApply={handleApply}
                   className={cn(
                     "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300",
                     index > 0 ? "motion-safe:delay-75" : "",
