@@ -37,6 +37,12 @@ const dayOfWeekValidator = v.union(
 
 export const opportunityDayOfWeekValidator = dayOfWeekValidator;
 
+export const applicationStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("accepted"),
+  v.literal("rejected"),
+);
+
 const timeSlotValidator = v.object({
   start: v.string(), // "HH:MM" 24h format
   end: v.string(),   // "HH:MM" 24h format
@@ -167,4 +173,17 @@ export default defineSchema({
     .index("by_city", ["location.city"])
     .index("by_urgency", ["urgency"])
     .index("by_status", ["status"]),
+
+  volunteerApplications: defineTable({
+    volunteerAccountId: v.id("volunteerAccounts"),
+    opportunityId: v.id("opportunities"),
+    coverLetter: v.string(),
+    status: applicationStatusValidator,
+    appliedAt: v.number(),
+    respondedAt: v.optional(v.number()),
+  })
+    .index("by_volunteer", ["volunteerAccountId"])
+    .index("by_opportunity", ["opportunityId"])
+    .index("by_status", ["status"])
+    .index("by_volunteer_opportunity", ["volunteerAccountId", "opportunityId"]),
 });

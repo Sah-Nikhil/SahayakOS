@@ -264,3 +264,96 @@ export const getMapData = query({
     }));
   },
 });
+
+export const getMyApplications = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+
+    const volunteerAccount = await ctx.db
+      .query("volunteerAccounts")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+
+    if (!volunteerAccount) {
+      return [];
+    }
+
+    const applications = await ctx.db
+      .query("volunteerApplications")
+      .withIndex("by_volunteer", (q) =>
+        q.eq("volunteerAccountId", volunteerAccount._id),
+      )
+      .take(200);
+
+    const enriched = await Promise.all(
+      applications.map(async (app) => {
+        const opportunity = await ctx.db.get(app.opportunityId);
+        const ngo = opportunity ? await ctx.db.get(opportunity.ngoId) : null;
+        return {
+          ...app,
+          opportunity,
+          ngo,
+        };
+      }),
+    );
+
+    return enriched.sort((a, b) => b.appliedAt - a.appliedAt);
+  },
+});
+
+export const getApplicationsByOpportunity = query({
+  args: {
+    opportunityId: v.id("opportunities"),
+  },
+  handler: async (ctx, args) => {
+    const applications = await ctx.db
+      .query("volunteerApplications")
+      .withIndex("by_opportunity", (q) =>
+        q.eq("opportunityId", args.opportunityId),
+      )
+      .take(500);
+
+    const enriched = await Promise.all(
+      applications.map(async (app) => {
+        const volunteerAccount = await ctx.db.get(app.volunteerAccountId);
+        const volunteer = volunteerAccount?.volunteerId
+          ? await ctx.db.get(volunteerAccount.volunteerId)
+          : null;
+        return {
+          ...app,
+          volunteer,
+          volunteerAccount,
+        };
+      }),
+    );
+
+    return enriched.sort((a, b) => b.appliedAt - a.appliedAt);
+  },
+});
+
+export const getApplicationStatistics = query({
+  args: {
+    opportunityId: v.id("opportunities"),
+  },
+  handler: async (ctx, args) => {
+    const applications = await ctx.db
+      .query("volunteerApplications")
+      .withIndex("by_opportunity", (q) =>
+        q.eq("opportunityId", args.opportunityId),
+      )
+      .take(500);
+
+    return {
+      total: applications.length,
+      pending: applications.filter((a) => a.status === "pending").length,
+      accepted: applications.filter((a) => a.status === "accepted").length,
+      rejected: applications.filter((a) => a.status === "rejected").length,
+    };
+  },
+});

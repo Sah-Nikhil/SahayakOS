@@ -7,6 +7,7 @@ import {
   opportunityStatusValidator,
   opportunityTimeWindowValidator,
   opportunityUrgencyValidator,
+  applicationStatusValidator,
 } from "./schema";
 
 const normalizeStringArray = (values: string[]) =>
@@ -214,5 +215,219 @@ export const deleteOpportunity = mutation({
 
     await ctx.db.delete(args.opportunityId);
     return args.opportunityId;
+  },
+});
+
+export const createVolunteerApplication = mutation({
+  args: {
+    opportunityId: v.id("opportunities"),
+    coverLetter: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated. Please sign in first.");
+    }
+
+    // Get volunteer account
+    const volunteerAccount = await ctx.db
+      .query("volunteerAccounts")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+
+    if (!volunteerAccount) {
+      throw new Error("Volunteer account not found.");
+    }
+
+    // Check if opportunity exists
+    const opportunity = await ctx.db.get(args.opportunityId);
+    if (!opportunity) {
+      throw new Error("Opportunity not found.");
+    }
+
+    // Check if already applied
+    const existingApplication = await ctx.db
+      .query("volunteerApplications")
+      .withIndex("by_volunteer_opportunity", (q) =>
+        q.eq("volunteerAccountId", volunteerAccount._id).eq("opportunityId", args.opportunityId),
+      )
+      .unique();
+
+    if (existingApplication) {
+      throw new Error("You have already applied to this opportunity.");
+    }
+
+    return await ctx.db.insert("volunteerApplications", {
+      volunteerAccountId: volunteerAccount._id,
+      opportunityId: args.opportunityId,
+      coverLetter: args.coverLetter.trim(),
+      status: "pending",
+      appliedAt: Date.now(),
+    });
+  },
+});
+
+export const updateApplicationStatus = mutation({
+  args: {
+    applicationId: v.id("volunteerApplications"),
+    status: applicationStatusValidator,
+  },
+  handler: async (ctx, args) => {
+    const identity = await requireOwnerIdentity(ctx);
+
+    const application = await ctx.db.get(args.applicationId);
+    if (!application) {
+      throw new Error("Application not found.");
+    }
+
+    const opportunity = await ctx.db.get(application.opportunityId);
+    if (!opportunity) {
+      throw new Error("Opportunity not found.");
+    }
+
+    const ngo = await ctx.db.get(opportunity.ngoId);
+    if (!ngo) {
+      throw new Error("NGO not found.");
+    }
+
+    if (ngo.ownerTokenIdentifier !== identity.tokenIdentifier) {
+      throw new Error("You do not own this NGO.");
+    }
+
+    await ctx.db.patch(args.applicationId, {
+      status: args.status,
+      respondedAt: Date.now(),
+    });
+
+    return await ctx.db.get(args.applicationId);
+  },
+});
+
+export const deleteVolunteerApplication = mutation({
+  args: {
+    applicationId: v.id("volunteerApplications"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated. Please sign in first.");
+    }
+
+    const application = await ctx.db.get(args.applicationId);
+    if (!application) {
+      throw new Error("Application not found.");
+    }
+
+    const volunteerAccount = await ctx.db
+      .query("volunteerAccounts")
+      .withIndex("by_tokenIdentifier", (q) =>
+        q.eq("tokenIdentifier", identity.tokenIdentifier),
+      )
+      .unique();
+
+    if (!volunteerAccount || volunteerAccount._id !== application.volunteerAccountId) {
+      throw new Error("You do not own this application.");
+    }
+
+    if (application.status !== "pending") {
+      throw new Error("You can only delete pending applications.");
+    }
+
+    await ctx.db.delete(args.applicationId);
+    return args.applicationId;
+  },
+});
+
+export const upsertOpportunityFromN8n = mutation({
+  args: {
+    opportunityId: v.optional(v.id("opportunities")),
+    ngoId: v.id("ngos"),
+    title: v.string(),
+    description: v.string(),
+    location: opportunityLocationValidator,
+    timeWindow: opportunityTimeWindowValidator,
+    days: v.optional(v.array(opportunityDayOfWeekValidator)),
+    taskType: v.string(),
+    urgency: opportunityUrgencyValidator,
+    requiredSkills: v.array(v.string()),
+    skillPriorityMatrix: v.array(
+      v.object({
+        skill: v.string(),
+        priority: v.number(),
+      }),
+    ),
+    volunteersRequired: v.number(),
+    status: v.optional(opportunityStatusValidator),
+  },
+  handler: async (ctx, args) => {
+    const requiredSkills = normalizeStringArray(args.requiredSkills);
+    const requiredSkillSet = new Set(requiredSkills.map((skill) => skill.toLowerCase()));
+    const skillPriorityMatrix = args.skillPriorityMatrix
+      .map((entry) => ({
+        skill: entry.skill.trim(),
+        priority: entry.priority,
+      }))
+      .filter((entry) => entry.skill.length > 0);
+
+    if (requiredSkills.length === 0) {
+      throw new Error("Select at least one required skill.");
+    }
+
+    if (skillPriorityMatrix.length === 0) {
+      throw new Error("Select at least one skill priority.");
+    }
+
+    for (const entry of skillPriorityMatrix) {
+      if (!requiredSkillSet.has(entry.skill.toLowerCase())) {
+        throw new Error("Skill priority matrix can only include required skills.");
+      }
+    }
+
+    const ngo = await ctx.db.get(args.ngoId);
+    if (!ngo) {
+      throw new Error("NGO not found.");
+    }
+
+    if (args.opportunityId) {
+      // Update existing opportunity
+      const existing = await ctx.db.get(args.opportunityId);
+      if (!existing) {
+        throw new Error("Opportunity not found.");
+      }
+
+      await ctx.db.patch(args.opportunityId, {
+        title: args.title.trim(),
+        description: args.description.trim(),
+        location: args.location,
+        timeWindow: args.timeWindow,
+        days: args.days && args.days.length > 0 ? args.days : undefined,
+        taskType: args.taskType.trim(),
+        urgency: args.urgency,
+        requiredSkills,
+        skillPriorityMatrix,
+        status: args.status || existing.status,
+      });
+
+      return await ctx.db.get(args.opportunityId);
+    } else {
+      // Create new opportunity
+      return await ctx.db.insert("opportunities", {
+        ngoId: args.ngoId,
+        title: args.title.trim(),
+        description: args.description.trim(),
+        location: args.location,
+        timeWindow: args.timeWindow,
+        days: args.days && args.days.length > 0 ? args.days : undefined,
+        taskType: args.taskType.trim(),
+        urgency: args.urgency,
+        requiredSkills,
+        skillPriorityMatrix,
+        volunteersRequired: args.volunteersRequired,
+        status: args.status || "open",
+        createdAt: Date.now(),
+      });
+    }
   },
 });

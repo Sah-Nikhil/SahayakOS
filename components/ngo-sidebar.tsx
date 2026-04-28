@@ -8,6 +8,8 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { SingleSelect, type SingleSelectOption } from "@/components/ui/single-select";
+import { Button } from "@/components/ui/button";
+import { ApplyModal } from "@/components/apply-modal";
 import { cn } from "@/lib/utils";
 import {
   ChevronDown,
@@ -17,6 +19,7 @@ import {
   MapPin,
   Search,
   User,
+  Briefcase,
 } from "lucide-react";
 
 type NgoWithOpportunities = Doc<"ngos"> & {
@@ -82,9 +85,11 @@ const locationModeLabel = (type: string) => {
 function OpportunityCard({
   opportunity,
   className,
+  onApply,
 }: {
   opportunity: Doc<"opportunities">;
   className?: string;
+  onApply?: (opportunityId: string, title: string, location: string) => void;
 }) {
   const isFilled = opportunity.status === "filled";
 
@@ -109,8 +114,11 @@ function OpportunityCard({
         </div>
         <button
           type="button"
-          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 hover:text-foreground"
-          aria-label={`Open ${opportunity.title}`}
+          onClick={() => onApply?.(opportunity._id, opportunity.title, opportunity.location.city)}
+          disabled={isFilled}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label={isFilled ? `${opportunity.title} (Filled)` : `Apply to ${opportunity.title}`}
+          title={isFilled ? "This opportunity has been filled" : "Apply to this opportunity"}
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </button>
@@ -175,6 +183,12 @@ type NGOSidebarProps = {
 
 export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
   const [selectedRole, setSelectedRole] = useState("all");
+  const [applyModalState, setApplyModalState] = useState<{
+    isOpen: boolean;
+    opportunityId?: string;
+    title?: string;
+    location?: string;
+  }>({ isOpen: false });
   const ngosWithOpportunities = useQuery(api.queries.getNGOsWithOpportunities, {
     city: cityName,
     taskType: selectedRole === "all" ? undefined : selectedRole,
@@ -202,6 +216,14 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
   );
 
   const isLoading = ngosWithOpportunities === undefined;
+
+  const handleApply = (opportunityId: string, title: string, location: string) => {
+    setApplyModalState({ isOpen: true, opportunityId, title, location });
+  };
+
+  const handleCloseApplyModal = () => {
+    setApplyModalState({ isOpen: false });
+  };
 
   return (
     <aside
@@ -285,6 +307,7 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
                 <OpportunityCard
                   key={opportunity._id}
                   opportunity={opportunity}
+                  onApply={handleApply}
                   className={cn(
                     "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300",
                     index > 0 ? "motion-safe:delay-75" : "",
@@ -304,13 +327,23 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
               <h2 className="text-3xl font-bold tracking-tight text-foreground">NGOs</h2>
               <p className="mt-1.5 text-sm text-muted-foreground">Click on an NGO to view opportunities</p>
             </div>
-            <Link
-              href="/profile"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card/40 text-muted-foreground transition-all duration-200 hover:scale-[1.03] hover:border-primary/30 hover:text-foreground active:scale-[0.97]"
-              aria-label="Open profile"
-            >
-              <User className="h-4 w-4" />
-            </Link>
+            <div className="flex gap-2">
+              <Link
+                href="/applications"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card/40 text-muted-foreground transition-all duration-200 hover:scale-[1.03] hover:border-primary/30 hover:text-foreground active:scale-[0.97]"
+                aria-label="View my applications"
+                title="View my applications"
+              >
+                <Briefcase className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/profile"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card/40 text-muted-foreground transition-all duration-200 hover:scale-[1.03] hover:border-primary/30 hover:text-foreground active:scale-[0.97]"
+                aria-label="Open profile"
+              >
+                <User className="h-4 w-4" />
+              </Link>
+            </div>
           </div>
 
           <div className="space-y-3 border-y border-border/50 px-5 py-4">
@@ -399,6 +432,13 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
           </div>
         </div>
       )}
+      <ApplyModal
+        isOpen={applyModalState.isOpen}
+        onClose={handleCloseApplyModal}
+        opportunityId={applyModalState.opportunityId || ""}
+        opportunityTitle={applyModalState.title}
+        opportunityLocation={applyModalState.location}
+      />
     </aside>
   );
 }
