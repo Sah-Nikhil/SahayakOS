@@ -118,6 +118,7 @@ export function NgoLoginForm({ className, ...props }: React.ComponentProps<"div"
                 </Button>
               </Field>
 
+              <div id="clerk-captcha" />
               {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
 
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
