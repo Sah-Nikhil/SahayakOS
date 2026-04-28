@@ -21,6 +21,13 @@ const isVolunteerCurrentlyAvailable = (volunteer: Doc<"volunteers">) => {
   return volunteer.availability.days.some((day) => day.enabled && day.hours > 0);
 };
 
+export type PublicNgoWithOpportunities = Pick<
+  Doc<"ngos">,
+  "_id" | "name" | "description" | "hqLocation" | "focusAreas"
+> & {
+  opportunities: Doc<"opportunities">[];
+};
+
 const filterOpportunities = (
   opportunities: Doc<"opportunities">[],
   filters: {
