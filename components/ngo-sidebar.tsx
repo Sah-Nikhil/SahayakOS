@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import type { PublicNgoWithOpportunities } from "@/convex/queries";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { SingleSelect, type SingleSelectOption } from "@/components/ui/single-select";
 import { cn } from "@/lib/utils";
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -19,9 +19,7 @@ import {
   User,
 } from "lucide-react";
 
-type NgoWithOpportunities = Doc<"ngos"> & {
-  opportunities: Doc<"opportunities">[];
-};
+type NgoWithOpportunities = PublicNgoWithOpportunities;
 
 type OpportunityStatus = "open" | "filled" | "closed";
 const volunteerOpportunityStatuses: OpportunityStatus[] = ["open", "filled"];
@@ -171,19 +169,35 @@ const ROLE_OPTIONS: SingleSelectOption[] = [
 type NGOSidebarProps = {
   cityName?: string;
   className?: string;
+  selectedNgoId?: Id<"ngos"> | null;
+  onSelectedNgoIdChange?: (ngoId: Id<"ngos"> | null) => void;
 };
 
-export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
+export function NGOSidebar({
+  cityName,
+  className,
+  selectedNgoId: externallySelectedNgoId,
+  onSelectedNgoIdChange,
+}: NGOSidebarProps) {
   const [selectedRole, setSelectedRole] = useState("all");
   const ngosWithOpportunities = useQuery(api.queries.getNGOsWithOpportunities, {
     city: cityName,
     taskType: selectedRole === "all" ? undefined : selectedRole,
     statuses: volunteerOpportunityStatuses,
   });
-  const [selectedNgoId, setSelectedNgoId] = useState<Id<"ngos"> | null>(null);
+  const [internalSelectedNgoId, setInternalSelectedNgoId] = useState<Id<"ngos"> | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const isExternallyControlled = externallySelectedNgoId !== undefined;
+  const selectedNgoId = isExternallyControlled ? externallySelectedNgoId : internalSelectedNgoId;
 
-  const ngos: NgoWithOpportunities[] = ngosWithOpportunities ?? [];
+  const ngos = useMemo<NgoWithOpportunities[]>(() => ngosWithOpportunities ?? [], [ngosWithOpportunities]);
+
+  const handleSelectedNgoIdChange = (ngoId: Id<"ngos"> | null) => {
+    if (!isExternallyControlled) {
+      setInternalSelectedNgoId(ngoId);
+    }
+    onSelectedNgoIdChange?.(ngoId);
+  };
 
   const filteredNgos = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -218,7 +232,7 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
         >
           <button
             type="button"
-            onClick={() => setSelectedNgoId(null)}
+            onClick={() => handleSelectedNgoIdChange(null)}
             className="inline-flex h-10 w-fit items-center gap-2 rounded-xl border border-border/60 bg-card/40 px-3 text-sm text-muted-foreground transition-all duration-200 hover:border-primary/30 hover:text-foreground active:scale-[0.98]"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -345,7 +359,7 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
                 <button
                   key={ngo._id}
                   type="button"
-                  onClick={() => setSelectedNgoId(ngo._id)}
+                  onClick={() => handleSelectedNgoIdChange(ngo._id)}
                   className="group w-full rounded-2xl border border-border/50 bg-card/50 p-4 text-left shadow-[6px_6px_20px] shadow-foreground/3 backdrop-blur-sm transition-[transform,border-color,background-color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card/70 active:scale-[0.995]"
                 >
                   <div className="flex gap-3">

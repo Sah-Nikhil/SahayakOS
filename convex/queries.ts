@@ -13,6 +13,13 @@ const mapFilterArgs = {
 
 const normalizeSkill = (value: string) => value.trim().toLowerCase();
 
+export type PublicNgoWithOpportunities = Pick<
+  Doc<"ngos">,
+  "_id" | "name" | "description" | "hqLocation" | "focusAreas"
+> & {
+  opportunities: Doc<"opportunities">[];
+};
+
 const filterOpportunities = (
   opportunities: Doc<"opportunities">[],
   filters: {
@@ -61,7 +68,7 @@ const filterOpportunities = (
 const getNgoRowsFromOpportunities = async (
   ctx: QueryCtx,
   opportunities: Doc<"opportunities">[],
-) => {
+): Promise<PublicNgoWithOpportunities[]> => {
   const ngoIds = [...new Set(opportunities.map((opportunity) => opportunity.ngoId))];
   const ngos = await Promise.all(ngoIds.map((ngoId) => ctx.db.get(ngoId)));
   const ngoOpportunities = new Map<Doc<"ngos">["_id"], Doc<"opportunities">[]>();
@@ -82,7 +89,11 @@ const getNgoRowsFromOpportunities = async (
 
     return [
       {
-        ...ngo,
+        _id: ngo._id,
+        name: ngo.name,
+        description: ngo.description,
+        hqLocation: ngo.hqLocation,
+        focusAreas: ngo.focusAreas,
         opportunities: ngoOpportunities.get(ngo._id) ?? [],
       },
     ];
@@ -98,8 +109,8 @@ const getNgosWithFilteredOpportunities = async (
     taskType?: string;
     statuses?: Array<"open" | "filled" | "closed">;
   },
-) => {
-  let ngos;
+): Promise<PublicNgoWithOpportunities[]> => {
+  let ngos: Doc<"ngos">[];
   if (filters.city) {
     const opportunities = await ctx.db
       .query("opportunities")
@@ -123,7 +134,11 @@ const getNgosWithFilteredOpportunities = async (
 
       const filteredOpportunities = filterOpportunities(opportunities, filters);
       return {
-        ...ngo,
+        _id: ngo._id,
+        name: ngo.name,
+        description: ngo.description,
+        hqLocation: ngo.hqLocation,
+        focusAreas: ngo.focusAreas,
         opportunities: filteredOpportunities,
       };
     }),

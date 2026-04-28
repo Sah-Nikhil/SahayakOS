@@ -1,4 +1,5 @@
-import { mutation } from "./_generated/server";
+import { mutation, type MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import {
   opportunityDayOfWeekValidator,
@@ -12,12 +13,26 @@ import {
 const normalizeStringArray = (values: string[]) =>
   values.map((value) => value.trim()).filter((value) => value.length > 0);
 
-const requireOwnerIdentity = async (ctx: { auth: { getUserIdentity: () => Promise<{ tokenIdentifier: string } | null> } }) => {
+const requireOwnerIdentity = async (ctx: MutationCtx) => {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
     throw new Error("Not authenticated. Please sign in first.");
   }
   return identity;
+};
+
+const requireOwnedNgo = async (ctx: MutationCtx, ngoId: Id<"ngos">) => {
+  const identity = await requireOwnerIdentity(ctx);
+  const ngo = await ctx.db.get(ngoId);
+  if (!ngo) {
+    throw new Error("NGO not found.");
+  }
+
+  if (ngo.ownerTokenIdentifier !== identity.tokenIdentifier) {
+    throw new Error("You do not own this NGO.");
+  }
+
+  return ngo;
 };
 
 export const createNGO = mutation({
@@ -84,7 +99,7 @@ export const updateNGO = mutation({
       throw new Error("NGO not found.");
     }
 
-    if (existingNgo.ownerTokenIdentifier && existingNgo.ownerTokenIdentifier !== identity.tokenIdentifier) {
+    if (existingNgo.ownerTokenIdentifier !== identity.tokenIdentifier) {
       throw new Error("You do not own this NGO.");
     }
 
@@ -131,10 +146,7 @@ export const createOpportunity = mutation({
     status: opportunityStatusValidator,
   },
   handler: async (ctx, args) => {
-    const ngo = await ctx.db.get(args.ngoId);
-    if (!ngo) {
-      throw new Error("NGO not found.");
-    }
+    await requireOwnedNgo(ctx, args.ngoId);
 
     if (args.timeWindow.end < args.timeWindow.start) {
       throw new Error("timeWindow.end must be greater than or equal to timeWindow.start.");
