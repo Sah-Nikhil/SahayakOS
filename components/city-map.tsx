@@ -3,8 +3,11 @@
 import { useEffect, useMemo, useRef } from "react";
 import "leaflet/dist/leaflet.css";
 import { Minus, Plus } from "lucide-react";
-import type { LatLngExpression, Map as LeafletMap } from "leaflet";
+import type { LatLngExpression, Map as LeafletMap, LayerGroup } from "leaflet";
 import type { CityMapBounds, CityMapViewConfig } from "@/lib/city-maps";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 
 const CLEAN_LIGHT_TILE_URL =
   "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png";
@@ -13,8 +16,8 @@ const CLEAN_LIGHT_LABELS_TILE_URL =
 const CLEAN_LIGHT_TILE_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
 
-// Leaflet zoom levels are logarithmic, so a 1.09x scale change is roughly 9%.
-const ZOOM_SCALE_STEP = 1.09;
+// Leaflet zoom levels are logarithmic, so a 1.60x scale change is roughly 60%.
+const ZOOM_SCALE_STEP = 1.60;
 const ZOOM_STEP = Math.log2(ZOOM_SCALE_STEP);
 
 // Tweak these values if you want to experiment with how far the map opens.
@@ -28,6 +31,14 @@ const DEFAULT_MIN_ZOOM_FLOOR = 5;
 const DEFAULT_MIN_ZOOM_OFFSET = 4;
 const DEFAULT_MAX_ZOOM = 19;
 
+export type CityMapMarker = {
+  ngoId: Id<"ngos">;
+  ngoName: string;
+  lat: number;
+  lng: number;
+  opportunitiesCount: number;
+};
+
 export type CityMapProps = {
   cityName: string;
   center: {
@@ -37,6 +48,8 @@ export type CityMapProps = {
   view?: CityMapViewConfig;
   heightClassName?: string;
   className?: string;
+  onMarkerClick?: (ngoId: Id<"ngos">) => void;
+  opportunityStatuses?: Array<"open" | "filled" | "closed">;
 };
 
 const getInitialZoom = (map: LeafletMap, overrideZoom?: number) => {
@@ -84,9 +97,19 @@ export function CityMap({
   view,
   heightClassName,
   className,
+  onMarkerClick,
+  opportunityStatuses,
 }: CityMapProps) {
   const mapNodeRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
+  const markersLayerRef = useRef<LayerGroup | null>(null);
+
+  const mapData = useQuery(
+    api.queries.getMapData,
+    opportunityStatuses
+      ? { city: cityName, statuses: opportunityStatuses }
+      : { city: cityName },
+  );
 
   const mapCenter = useMemo<LatLngExpression>(
     () => [center.latitude, center.longitude],
@@ -116,6 +139,7 @@ export function CityMap({
         maxBoundsViscosity: view?.bounds ? 1 : 0,
       });
       mapRef.current = map;
+      markersLayerRef.current = leaflet.layerGroup().addTo(map);
       const minimumZoom = getMinimumZoom(map, view);
       map.setMinZoom(minimumZoom);
 
@@ -155,8 +179,44 @@ export function CityMap({
       map?.off();
       map?.remove();
       mapRef.current = null;
+      markersLayerRef.current = null;
     };
   }, [cityName, mapCenter, view]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = markersLayerRef.current;
+    if (!map || !layer || !mapData) {
+      return;
+    }
+
+    layer.clearLayers();
+
+    void (async () => {
+      const leaflet = await import("leaflet");
+      for (const marker of mapData) {
+        const circle = leaflet.circleMarker([marker.lat, marker.lng], {
+          radius: 8,
+          color: "#0f766e",
+          fillColor: "#14b8a6",
+          fillOpacity: 0.85,
+          weight: 2,
+        });
+
+        circle
+          .bindTooltip(`${marker.ngoName} (${marker.opportunitiesCount})`, {
+            direction: "top",
+            className: "rounded-lg border-0 bg-background/95 px-2 py-1 text-xs font-semibold shadow-sm backdrop-blur-sm",
+          })
+          .on("click", () => {
+            if (onMarkerClick) {
+              onMarkerClick(marker.ngoId);
+            }
+          })
+          .addTo(layer);
+      }
+    })();
+  }, [mapData, onMarkerClick]);
 
   return (
     <section

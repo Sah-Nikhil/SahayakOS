@@ -53,7 +53,7 @@ export function LoginForm({
       }
 
       const { error } = await signIn.password({
-        identifier: normalizedEmail,
+        emailAddress: normalizedEmail,
         password: password.trim(),
       })
 
@@ -67,18 +67,15 @@ export function LoginForm({
         return
       }
 
-      const { error: finalizeError } = await signIn.finalize()
-      if (finalizeError) {
-        setError(finalizeError.message ?? "Unable to log in with those credentials.")
-        return
-      }
+      await signIn.finalize()
 
       setVolunteerSession({ email: normalizedEmail })
 
-      const destination = redirectUrl ?? "/profile"
+      const destination = redirectUrl ?? "/"
       window.location.assign(destination)
 
     } catch (error) {
+      console.error("Login error:", error)
       setError(error instanceof Error ? error.message : "Unable to login right now.")
     } finally {
       setIsSubmitting(false)
@@ -167,6 +164,9 @@ export function LoginForm({
               </Field> */}
               <FieldDescription className="text-center">
                 Don&apos;t have an account? <a href="/signup">Sign up</a>
+              </FieldDescription>
+              <FieldDescription className="text-center text-xs">
+                Are you an NGO? <a href="/ngo/signup" className="underline">Sign up here</a>
               </FieldDescription>
             </FieldGroup>
           </form>

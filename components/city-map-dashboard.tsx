@@ -12,6 +12,8 @@ type CityMapDashboardProps = {
   error: string | null;
 };
 
+const volunteerOpportunityStatuses: Array<"open" | "filled"> = ["open", "filled"];
+
 export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
   const [selectedCityName, setSelectedCityName] = useState(cities[0]?.name ?? "");
 
@@ -53,6 +55,7 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
               view={selectedCity.view}
               heightClassName="h-full"
               className="h-full w-full rounded-none border-0"
+              opportunityStatuses={volunteerOpportunityStatuses}
             />
           </>
         ) : (
@@ -61,7 +64,11 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
           </section>
         )}
       </section>
-      <NGOSidebar className="hidden xl:flex" />
+      <NGOSidebar
+        key={selectedCityName || "no-city"}
+        cityName={selectedCityName}
+        className="hidden xl:flex"
+      />
     </main>
   );
 }

@@ -49,17 +49,17 @@ export function SignupForm({
     normalizedPhone: string
     normalizedName: string
   }) => {
-    if (!signUp) {
+    if (fetchStatus === "fetching" || !signUp) {
       throw new Error("Clerk is still loading. Please try again.")
+    }
+
+    if (!signUp.createdSessionId) {
+      throw new Error("Unable to activate the new session.")
     }
 
     const { error: finalizeError } = await signUp.finalize()
     if (finalizeError) {
       throw finalizeError
-    }
-
-    if (!signUp.createdSessionId) {
-      throw new Error("Unable to activate the new session.")
     }
 
     await waitForConvexToken(getToken)
@@ -180,6 +180,7 @@ export function SignupForm({
       const { error } = await signUp.password({
         emailAddress: normalizedEmail,
         password,
+        firstName: normalizedName,
       })
 
       if (error) {

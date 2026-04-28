@@ -1,337 +1,270 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useRouter } from "next/navigation"
-import { useAuth, useUser } from "@clerk/nextjs"
-import { useQuery } from "convex/react"
-import { useMutation } from "convex/react"
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { useAuth, useSignUp } from "@clerk/nextjs";
 
-import { api } from "@/convex/_generated/api"
-import type { Doc } from "@/convex/_generated/dataModel"
-import { retryOnConvexNotAuthenticated, waitForConvexToken } from "@/lib/clerk-convex-auth"
-import { setNgoSession } from "@/lib/ngo-session"
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Field,
   FieldDescription,
   FieldGroup,
   FieldLabel,
   FieldSeparator,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
-import { MultiSelect } from "@/components/ui/multi-select"
-
-const COVERAGE_OPTIONS = [
-  { label: "Local", value: "local" },
-  { label: "City", value: "city" },
-  { label: "State", value: "state" },
-  { label: "National", value: "national" },
-  { label: "International", value: "international" },
-]
-
-const FOCUS_OPTIONS = [
-  { label: "Disaster Relief", value: "disaster_relief" },
-  { label: "Medical Aid", value: "medical_aid" },
-  { label: "Food & Shelter", value: "food_shelter" },
-  { label: "Education", value: "education" },
-  { label: "Logistics", value: "logistics" },
-  { label: "Rescue", value: "rescue" },
-  { label: "Counseling", value: "counseling" },
-]
-
-type FormData = {
-  ngoName: string
-  registrationId: string
-  hqLocation: string
-  coverageArea: string[]
-  focusAreas: string[]
-  pocName: string
-  pocEmail: string
-  pocPhone: string
-}
-
-const defaultFormData: FormData = {
-  ngoName: "",
-  registrationId: "",
-  hqLocation: "",
-  coverageArea: [],
-  focusAreas: [],
-  pocName: "",
-  pocEmail: "",
-  pocPhone: "",
-}
-
-const toFormData = (ngo: Doc<"ngos">): FormData => ({
-  ngoName: ngo.ngoName,
-  registrationId: ngo.registrationId,
-  hqLocation: ngo.hqLocation,
-  coverageArea: ngo.coverageArea ?? [],
-  focusAreas: ngo.focusAreas ?? [],
-  pocName: ngo.pocDetails?.name ?? "",
-  pocEmail: ngo.pocDetails?.email ?? "",
-  pocPhone: ngo.pocDetails?.phone ?? "",
-})
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
 export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div">) {
-  const router = useRouter()
-  const { isLoaded, isSignedIn, getToken } = useAuth()
-  const { isLoaded: isUserLoaded, user } = useUser()
-  const saveNgoProfile = useMutation(api.ngos.saveCurrentNgoProfile)
-  const currentNgo = useQuery(api.ngos.getCurrentNgoProfile, isSignedIn ? {} : "skip")
-  const [formData, setFormData] = React.useState<FormData>(defaultFormData)
-  const [isSaving, setIsSaving] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-  const hydratedRef = React.useRef(false)
+  const router = useRouter();
+  const { isSignedIn } = useAuth();
+  const { fetchStatus, signUp } = useSignUp();
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [verificationCode, setVerificationCode] = React.useState("");
+  const [awaitingEmailVerification, setAwaitingEmailVerification] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const authEmail =
-    user?.primaryEmailAddress?.emailAddress ?? user?.emailAddresses[0]?.emailAddress ?? ""
-
-  React.useEffect(() => {
-    if (!currentNgo || hydratedRef.current) {
-      return
+  const finalizeSignup = async () => {
+    if (fetchStatus === "fetching" || !signUp) {
+      throw new Error("Clerk is still loading. Please try again.");
     }
 
-    setFormData(toFormData(currentNgo))
-    hydratedRef.current = true
-  }, [currentNgo])
-
-  React.useEffect(() => {
-    if (!isSignedIn || !isUserLoaded || hydratedRef.current || currentNgo) {
-      return
+    if (signUp.status !== "complete" || !signUp.createdSessionId) {
+      throw new Error("Signup is not complete.");
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      pocEmail: authEmail || prev.pocEmail,
-    }))
-  }, [authEmail, currentNgo, isSignedIn, isUserLoaded])
+    await signUp.finalize();
 
-  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value } = event.target
-    if (id === "pocPhone") {
-      setFormData((prev) => ({ ...prev, pocPhone: value.replace(/\D/g, "").slice(0, 10) }))
-      return
+    // After Clerk signup, redirect to profile creation.
+    router.replace("/ngo/profile");
+  };
+
+  const handleResendCode = async () => {
+    setError(null);
+    setMessage(null);
+
+    if (fetchStatus === "fetching" || !signUp) {
+      setError("Clerk is still loading. Please try again.");
+      return;
     }
 
-    setFormData((prev) => ({ ...prev, [id]: value }))
-  }
+    setIsSubmitting(true);
+    try {
+      const { error } = await signUp.verifications.sendEmailCode();
+      if (error) {
+        setError(error.message ?? "Unable to send a new verification code right now.");
+        return;
+      }
+      setMessage(`A new verification code was sent to ${signUp.emailAddress ?? email.trim().toLowerCase()}.`);
+    } catch (submitError) {
+      console.error("Resend code error:", submitError);
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to send a new verification code right now.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setError(null)
+    event.preventDefault();
+    setError(null);
+    setMessage(null);
 
-    if (!isLoaded || !isSignedIn || !isUserLoaded || !user) {
-      setError("Please sign in with Clerk before creating or editing your NGO profile.")
-      return
+    if (isSignedIn) {
+      router.replace("/ngo/profile");
+      return;
     }
 
-    if (!authEmail) {
-      setError("Your Clerk account is missing an email address.")
-      return
+    if (fetchStatus === "fetching" || !signUp) {
+      setError("Clerk is still loading. Please try again.");
+      return;
     }
 
-    const normalizedEmail = authEmail.trim().toLowerCase()
-    const normalizedPhone = formData.pocPhone.replace(/\D/g, "").slice(0, 10)
+    if (awaitingEmailVerification) {
+      if (!verificationCode.trim()) {
+        setError("Please enter the verification code from your email.");
+        return;
+      }
 
-    if (
-      !formData.ngoName.trim() ||
-      !formData.registrationId.trim() ||
-      !formData.hqLocation.trim() ||
-      formData.coverageArea.length === 0 ||
-      formData.focusAreas.length === 0
-    ) {
-      setError("Please fill in all required fields before continuing.")
-      return
+      setIsSubmitting(true);
+      try {
+        const { error: verificationError } = await signUp.verifications.verifyEmailCode({
+          code: verificationCode.trim(),
+        });
+
+        if (verificationError) {
+          setError(
+            verificationError.message ?? "Unable to verify the code. Please check the code and try again.",
+          );
+          return;
+        }
+
+        if (signUp.status !== "complete" || !signUp.createdSessionId) {
+          setError("Email verification is still pending. Please check the code and try again.");
+          return;
+        }
+
+        await finalizeSignup();
+      } catch (submitError) {
+        console.error("Verification error:", submitError);
+        setError(submitError instanceof Error ? submitError.message : "Unable to continue right now.");
+      } finally {
+        setIsSubmitting(false);
+      }
+
+      return;
     }
 
-    setIsSaving(true)
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password.trim() || !confirmPassword.trim()) {
+      setError("Please fill in all fields before continuing.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
-      await waitForConvexToken(getToken)
-      const ngoId = await retryOnConvexNotAuthenticated(async () => {
-        return await saveNgoProfile({
-          ngoName: formData.ngoName.trim(),
-          registrationId: formData.registrationId.trim(),
-          hqLocation: formData.hqLocation.trim(),
-          coverageArea: formData.coverageArea,
-          focusAreas: formData.focusAreas,
-          pocDetails: {
-            name: formData.pocName.trim() || formData.ngoName.trim(),
-            email: normalizedEmail,
-            phone: normalizedPhone || undefined,
-          },
-        })
-      })
+      const { error } = await signUp.password({
+        emailAddress: normalizedEmail,
+        password,
+      });
 
-      setNgoSession({
-        ngoId,
-        email: normalizedEmail,
-        name: formData.ngoName.trim(),
-        phone: normalizedPhone || undefined,
-      })
+      if (error) {
+        setError(error.message ?? "Unable to continue right now.");
+        return;
+      }
 
-      router.replace("/ngo")
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Unable to save NGO profile right now.")
+      if (signUp.status === "complete" && signUp.createdSessionId) {
+        await finalizeSignup();
+        return;
+      }
+
+      const { error: sendCodeError } = await signUp.verifications.sendEmailCode();
+      if (sendCodeError) {
+        setError(sendCodeError.message ?? "Unable to send a verification code right now.");
+        return;
+      }
+
+      setAwaitingEmailVerification(true);
+      setMessage(`We sent a verification code to ${normalizedEmail}. Enter it below to finish sign up.`);
+    } catch (submitError) {
+      console.error("Signup error:", submitError);
+      setError(submitError instanceof Error ? submitError.message : "Unable to continue right now.");
     } finally {
-      setIsSaving(false)
+      setIsSubmitting(false);
     }
-  }
-
-  if (!isLoaded || !isUserLoaded) {
-    return (
-      <div className={cn("flex flex-col gap-6", className)} {...props}>
-        <Card className="overflow-hidden p-0">
-          <CardContent className="p-6 md:p-8">
-            <p className="text-sm text-muted-foreground">Loading your Clerk session...</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (!isSignedIn) {
-    return (
-      <div className={cn("flex flex-col gap-6", className)} {...props}>
-        <Card className="overflow-hidden p-0">
-          <CardContent className="grid gap-6 p-6 md:p-8">
-            <div className="space-y-2 text-center">
-              <h1 className="text-2xl font-bold">Register your NGO</h1>
-              <p className="text-sm text-muted-foreground">
-                Sign in with Clerk to create or update your NGO profile securely.
-              </p>
-            </div>
-            <FieldGroup>
-              <Field>
-                <Button type="button" onClick={() => router.push("/ngo/login")}>
-                  Sign in
-                </Button>
-              </Field>
-              <FieldDescription className="text-center">
-                Need a Clerk account? <a href="/signup">Create one</a>
-              </FieldDescription>
-            </FieldGroup>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  };
 
   return (
-    <div className={cn("flex flex-col gap-6", className)} {...props}>
+    <div className={className} {...props}>
       <Card className="overflow-hidden p-0">
         <CardContent className="grid p-0 md:grid-cols-2">
           <form className="p-6 md:p-8" onSubmit={handleSubmit}>
             <FieldGroup>
               <div className="flex flex-col items-center gap-2 text-center">
-                <h1 className="text-2xl font-bold">Register your NGO</h1>
+                <h1 className="text-2xl font-bold">Create NGO account</h1>
+                <p className="text-sm text-muted-foreground">
+                  This only creates the NGO login. You will build the public profile next.
+                </p>
               </div>
 
               <Field>
-                <FieldLabel htmlFor="ngoName">Organization Name</FieldLabel>
+                <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
-                  id="ngoName"
-                  type="text"
-                  value={formData.ngoName}
-                  onChange={handleChange}
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="registrationId">Registration ID</FieldLabel>
-                <Input
-                  id="registrationId"
-                  type="text"
-                  placeholder="REG-1234"
-                  value={formData.registrationId}
-                  onChange={handleChange}
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="hqLocation">Headquarter Location</FieldLabel>
-                <Input
-                  id="hqLocation"
-                  type="text"
-                  placeholder="City, State"
-                  value={formData.hqLocation}
-                  onChange={handleChange}
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel>Coverage Area</FieldLabel>
-                <MultiSelect
-                  options={COVERAGE_OPTIONS}
-                  selected={formData.coverageArea}
-                  onChange={(selected) => setFormData((prev) => ({ ...prev, coverageArea: selected }))}
-                  placeholder="Select coverage areas..."
-                />
-                <FieldDescription>Areas where your NGO can operate.</FieldDescription>
-              </Field>
-
-              <Field>
-                <FieldLabel>Focus Areas</FieldLabel>
-                <MultiSelect
-                  options={FOCUS_OPTIONS}
-                  selected={formData.focusAreas}
-                  onChange={(selected) => setFormData((prev) => ({ ...prev, focusAreas: selected }))}
-                  placeholder="Select focus areas..."
-                />
-                <FieldDescription>Primary focus areas for your organisation.</FieldDescription>
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="pocName">Point of Contact Name</FieldLabel>
-                <Input
-                  id="pocName"
-                  type="text"
-                  value={formData.pocName}
-                  onChange={handleChange}
-                  required
-                />
-              </Field>
-
-              <Field>
-                <FieldLabel htmlFor="pocEmail">Point of Contact Email</FieldLabel>
-                <Input
-                  id="pocEmail"
+                  id="email"
                   type="email"
-                  value={authEmail}
-                  readOnly
+                  placeholder="ngo@example.org"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={awaitingEmailVerification || isSubmitting}
                   required
                 />
-                <FieldDescription>This email comes from your Clerk account.</FieldDescription>
               </Field>
 
               <Field>
-                <FieldLabel htmlFor="pocPhone">Contact Phone</FieldLabel>
+                <FieldLabel htmlFor="password">Password</FieldLabel>
                 <Input
-                  id="pocPhone"
-                  type="tel"
-                  value={formData.pocPhone}
-                  onChange={handleChange}
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={awaitingEmailVerification || isSubmitting}
+                  required
                 />
               </Field>
 
-              {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
+              <Field>
+                <FieldLabel htmlFor="confirm-password">Confirm Password</FieldLabel>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  disabled={awaitingEmailVerification || isSubmitting}
+                  required
+                />
+              </Field>
+
+              {awaitingEmailVerification ? (
+                <Field>
+                  <FieldLabel htmlFor="verification-code">Email Verification Code</FieldLabel>
+                  <Input
+                    id="verification-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={verificationCode}
+                    onChange={(event) => setVerificationCode(event.target.value)}
+                    disabled={isSubmitting}
+                    required
+                  />
+                  <FieldDescription>
+                    Enter the verification code sent to your email.
+                  </FieldDescription>
+                </Field>
+              ) : null}
 
               <Field>
-                <Button type="submit" disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Save NGO Profile"}
+                <Button type="submit" disabled={isSubmitting}>
+                  {awaitingEmailVerification
+                    ? isSubmitting
+                      ? "Verifying..."
+                      : "Verify Email"
+                    : isSubmitting
+                      ? "Creating account..."
+                      : "Sign Up"}
                 </Button>
               </Field>
 
+              {awaitingEmailVerification ? (
+                <Field>
+                  <Button type="button" variant="outline" onClick={handleResendCode} disabled={isSubmitting}>
+                    Resend verification code
+                  </Button>
+                </Field>
+              ) : null}
+
+              <div id="clerk-captcha" />
+              {message ? <FieldDescription>{message}</FieldDescription> : null}
+              {error ? <FieldDescription className="text-destructive">{error}</FieldDescription> : null}
+
               <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                Or continue with
+                Already onboarded?
               </FieldSeparator>
 
               <FieldDescription className="text-center">
-                Already registered? <a href="/ngo/login">Login</a>
+                <a href="/ngo/login">Log in to your NGO account</a>
               </FieldDescription>
             </FieldGroup>
           </form>
@@ -346,11 +279,11 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
         </CardContent>
       </Card>
       <FieldDescription className="px-6 text-center">
-        By clicking continue, you agree to our <a href="#">Terms of Service</a>{" "}
-        and <a href="#">Privacy Policy</a>.
+        By clicking continue, you agree to our <a href="#">Terms of Service</a> and{" "}
+        <a href="#">Privacy Policy</a>.
       </FieldDescription>
     </div>
-  )
+  );
 }
 
-export default NgoSignupForm
+export default NgoSignupForm;

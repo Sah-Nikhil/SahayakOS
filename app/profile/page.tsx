@@ -19,6 +19,7 @@ import { useMutation, useQuery } from "convex/react"
 
 import { api } from "@/convex/_generated/api"
 import type { Doc } from "@/convex/_generated/dataModel"
+import { SKILL_OPTIONS } from "@/lib/form-options"
 import { retryOnConvexNotAuthenticated } from "@/lib/clerk-convex-auth"
 import { getVolunteerSession, setVolunteerSession } from "@/lib/volunteer-session"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -39,19 +40,6 @@ import {
   defaultSlotsAvailability,
   type AvailabilityValue,
 } from "@/components/availability-selector"
-
-const SKILLS_OPTIONS = [
-  { label: "Plumbing", value: "plumbing" },
-  { label: "Electrical Work", value: "electrical" },
-  { label: "Carpentry", value: "carpentry" },
-  { label: "Cleaning", value: "cleaning" },
-  { label: "Cooking", value: "cooking" },
-  { label: "Gardening", value: "gardening" },
-  { label: "Driving", value: "driving" },
-  { label: "Nursing", value: "nursing" },
-  { label: "Teaching", value: "teaching" },
-  { label: "IT Support", value: "it_support" },
-]
 
 const TRANSPORT_OPTIONS = [
   { label: "Bike", value: "bike" },
@@ -424,7 +412,7 @@ export default function ProfilePage() {
               <Field>
                 <FieldLabel>Skills</FieldLabel>
                 <MultiSelect
-                  options={SKILLS_OPTIONS}
+                  options={SKILL_OPTIONS}
                   selected={formData.skills}
                   onChange={(selected) => setFormData((prev) => ({ ...prev, skills: selected }))}
                   placeholder="Select your skills..."
