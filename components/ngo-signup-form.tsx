@@ -128,6 +128,11 @@ export function NgoSignupForm({ className, ...props }: React.ComponentProps<"div
       return;
     }
 
+    if (password.length < 8 || !/[0-9]/.test(password) || !/[^a-zA-Z0-9]/.test(password)) {
+      setError("Password must be at least 8 characters long, and include a number and a special character.");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
