@@ -13,6 +13,14 @@ const mapFilterArgs = {
 
 const normalizeSkill = (value: string) => value.trim().toLowerCase();
 
+const isVolunteerCurrentlyAvailable = (volunteer: Doc<"volunteers">) => {
+  if (volunteer.availability.mode === "slots") {
+    return volunteer.availability.days.some((day) => day.enabled && day.slots.length > 0);
+  }
+
+  return volunteer.availability.days.some((day) => day.enabled && day.hours > 0);
+};
+
 const filterOpportunities = (
   opportunities: Doc<"opportunities">[],
   filters: {
@@ -175,6 +183,23 @@ export const getOpportunitiesByNgoId = query({
       .query("opportunities")
       .withIndex("by_ngo", (q) => q.eq("ngoId", args.ngoId))
       .take(200);
+  },
+});
+
+export const getOpportunityById = query({
+  args: {
+    opportunityId: v.id("opportunities"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.opportunityId);
+  },
+});
+
+export const getAvailableVolunteersForMatching = query({
+  args: {},
+  handler: async (ctx) => {
+    const volunteers = await ctx.db.query("volunteers").take(300);
+    return volunteers.filter((volunteer) => isVolunteerCurrentlyAvailable(volunteer));
   },
 });
 
