@@ -25,25 +25,25 @@ A volunteer coordination platform that connects NGOs with qualified volunteers f
 
 ```mermaid
 flowchart LR
-  User[Volunteer / NGO Rep] --> App[Next.js 16 App Router]
+  User[Volunteer / NGO Rep] --> App[Next.js 16<br/>App Router]
   App --> Pages[Route pages]
   Pages --> Components[Reusable React Components]
-  Components --> VolunteerUI[Volunteer map + NGO sidebar]
+  Components --> VolunteerUI[Volunteer map<br/>+ NGO sidebar]
   Components --> NgoUI[NGO dashboard]
   VolunteerUI --> Leaflet[Leaflet map]
   NgoUI --> Leaflet
-  VolunteerUI --> ApplyUI[Apply to opportunity UI]
-  NgoUI --> ReviewUI[Approve / deny UI]
+  VolunteerUI --> ApplyUI[Apply to<br/>opportunity]
+  NgoUI --> ReviewUI[Approve / deny<br/>applications]
 
   App --> Layout[Root layout]
   Layout --> Clerk[ClerkProvider]
   Layout --> ConvexProvider[ConvexClientProvider]
 
-  Clerk --> Auth[Clerk auth + token mapping]
-  ConvexProvider --> API[Convex queries / mutations]
-  API --> Schema[Schema + indexes + application workflow]
+  Clerk --> Auth[Clerk auth<br/>+ token mapping]
+  ConvexProvider --> API[Convex queries<br/>/ mutations]
+  API --> Schema[Schema + indexes<br/>+ application workflow]
   Schema --> DB[(Convex database)]
-  Schema --> Applications[(opportunityApplications table)]
+  Schema --> Applications[(opportunityApplications<br/>table)]
   ApplyUI --> API
   ReviewUI --> API
 
@@ -71,25 +71,25 @@ flowchart LR
 ## Application Flow
 
 ```mermaid
-flowchart TD
+flowchart TB
   Start[Visit SahayakOS] --> Home[Home city map]
   Home --> Choice{User type?}
-  Choice -->|Volunteer| VolunteerAuth[/Login or Signup/]
-  Choice -->|NGO| NgoAuth[/Login or Signup/]
+  Choice -->|Volunteer| VolunteerAuth[/Login or<br/>Signup/]
+  Choice -->|NGO| NgoAuth[/Login or<br/>Signup/]
 
   VolunteerAuth --> ClerkVolunteer[Clerk sign-in]
   ClerkVolunteer --> VolunteerProfile[Complete volunteer profile]
-  VolunteerProfile --> VolunteerHome[Volunteer map dashboard]
-  VolunteerHome --> BrowseRoles[Browse NGO opportunities]
-  BrowseRoles --> ApplyRole[Apply to opportunity]
+  VolunteerProfile --> VolunteerHome[Volunteer map<br/>dashboard]
+  VolunteerHome --> BrowseRoles[Browse NGO<br/>opportunities]
+  BrowseRoles --> ApplyRole[Apply to<br/>opportunity]
 
   NgoAuth --> ClerkNgo[Clerk sign-in]
   ClerkNgo --> NgoProfile[Complete NGO profile]
   NgoProfile --> NgoDashboard[NGO dashboard]
-  NgoDashboard --> Opportunities[Create / manage opportunities]
-  NgoDashboard --> ReviewApps[Review volunteer applications]
+  NgoDashboard --> Opportunities[Create / manage<br/>opportunities]
+  NgoDashboard --> ReviewApps[Review volunteer<br/>applications]
   ReviewApps --> Decision{Approve or deny?}
-  Decision -->|Approve| Approved[Volunteer approved]
+  Decision -->|Approve| Approved[Volunteer<br/>approved]
   Decision -->|Deny| Denied[Volunteer denied]
 
   VolunteerHome --> Convex[Convex data]
@@ -97,7 +97,7 @@ flowchart TD
   NgoDashboard --> Convex
   ReviewApps --> Convex
   Opportunities --> Convex
-  Convex --> StatusSync[Application status reflected to both dashboards]
+  Convex --> StatusSync[Status reflected in both dashboards]
 ```
 
 ## Quick Start
