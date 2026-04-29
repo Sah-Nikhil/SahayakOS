@@ -127,8 +127,8 @@ const normalizeOpportunityWriteInput = (args: OpportunityWriteInput) => {
 };
 
 const opportunityApplicationReviewStatusValidator = v.union(
-  v.literal("approved"),
-  v.literal("denied"),
+  v.literal("accepted"),
+  v.literal("rejected"),
 );
 
 const requireOwnerIdentity = async (ctx: MutationCtx) => {
@@ -463,96 +463,3 @@ export const deleteOpportunity = mutation({
   },
 });
 
-
-
-export const upsertOpportunityFromN8n = mutation({
-  args: {
-    opportunityId: v.optional(v.id("opportunities")),
-    ngoId: v.id("ngos"),
-    title: v.string(),
-    description: v.string(),
-    location: opportunityLocationValidator,
-    timeWindow: opportunityTimeWindowValidator,
-    days: v.optional(v.array(opportunityDayOfWeekValidator)),
-    taskType: v.string(),
-    urgency: opportunityUrgencyValidator,
-    requiredSkills: v.array(v.string()),
-    skillPriorityMatrix: v.array(
-      v.object({
-        skill: v.string(),
-        priority: v.number(),
-      }),
-    ),
-    volunteersRequired: v.number(),
-    status: v.optional(opportunityStatusValidator),
-  },
-  handler: async (ctx, args) => {
-    const requiredSkills = normalizeStringArray(args.requiredSkills);
-    const requiredSkillSet = new Set(requiredSkills.map((skill) => skill.toLowerCase()));
-    const skillPriorityMatrix = args.skillPriorityMatrix
-      .map((entry) => ({
-        skill: entry.skill.trim(),
-        priority: entry.priority,
-      }))
-      .filter((entry) => entry.skill.length > 0);
-
-    if (requiredSkills.length === 0) {
-      throw new Error("Select at least one required skill.");
-    }
-
-    if (skillPriorityMatrix.length === 0) {
-      throw new Error("Select at least one skill priority.");
-    }
-
-    for (const entry of skillPriorityMatrix) {
-      if (!requiredSkillSet.has(entry.skill.toLowerCase())) {
-        throw new Error("Skill priority matrix can only include required skills.");
-      }
-    }
-
-    const ngo = await ctx.db.get(args.ngoId);
-    if (!ngo) {
-      throw new Error("NGO not found.");
-    }
-
-    if (args.opportunityId) {
-      // Update existing opportunity
-      const existing = await ctx.db.get(args.opportunityId);
-      if (!existing) {
-        throw new Error("Opportunity not found.");
-      }
-
-      await ctx.db.patch(args.opportunityId, {
-        title: args.title.trim(),
-        description: args.description.trim(),
-        location: args.location,
-        timeWindow: args.timeWindow,
-        days: args.days && args.days.length > 0 ? args.days : undefined,
-        taskType: args.taskType.trim(),
-        urgency: args.urgency,
-        requiredSkills,
-        skillPriorityMatrix,
-        status: args.status || existing.status,
-      });
-
-      return await ctx.db.get(args.opportunityId);
-    } else {
-      // Create new opportunity
-      return await ctx.db.insert("opportunities", {
-        ngoId: args.ngoId,
-        title: args.title.trim(),
-        description: args.description.trim(),
-        location: args.location,
-        timeWindow: args.timeWindow,
-        days: args.days && args.days.length > 0 ? args.days : undefined,
-        taskType: args.taskType.trim(),
-        urgency: args.urgency,
-        requiredSkills,
-        skillPriorityMatrix,
-        volunteersRequired: args.volunteersRequired,
-        status: args.status || "open",
-        createdAt: Date.now(),
-      });
-    }
-  },
-});

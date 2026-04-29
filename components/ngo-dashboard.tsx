@@ -333,7 +333,7 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
 
   const handleReviewOpportunityApplication = async (
     applicationId: Id<"opportunityApplications">,
-    status: "approved" | "denied",
+    status: "accepted" | "rejected",
   ) => {
     setError(null);
     setPendingReviewApplicationId(applicationId);
@@ -451,7 +451,7 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
                                       {application.status}
                                     </p>
                                     <div className="flex gap-2">
-                                      {(["approved", "denied"] as const).map((status) => (
+                                      {(["accepted", "rejected"] as const).map((status) => (
                                         <Button
                                           key={status}
                                           type="button"

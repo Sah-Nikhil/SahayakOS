@@ -384,8 +384,8 @@ export const getOpportunityApplicationsForOwnedNgo = query({
 
     const statusPriority: Record<Doc<"opportunityApplications">["status"], number> = {
       pending: 0,
-      approved: 1,
-      denied: 2,
+      accepted: 1,
+      rejected: 2,
     };
 
     return hydratedApplications

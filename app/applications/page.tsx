@@ -14,11 +14,12 @@ type ApplicationStatus = "pending" | "accepted" | "rejected"
 interface ApplicationWithDetails {
   _id: string
   volunteerAccountId: string
+  volunteerId: string
   opportunityId: string
-  coverLetter: string
+  coverLetter?: string
   status: ApplicationStatus
   appliedAt: number
-  respondedAt?: number
+  reviewedAt?: number
   opportunity?: {
     _id: string
     title: string
@@ -35,7 +36,7 @@ interface ApplicationWithDetails {
 }
 
 export default function ApplicationsPage() {
-  const applications = useQuery(api.queries.getMyApplications) as ApplicationWithDetails[] | undefined
+  const applications = useQuery(api.queries.getMyOpportunityApplications) as ApplicationWithDetails[] | undefined
   const [statusFilter, setStatusFilter] = React.useState<ApplicationStatus | "all">("all")
 
   const getStatusColor = (status: ApplicationStatus) => {
@@ -55,7 +56,7 @@ export default function ApplicationsPage() {
       : applications
 
   const stats = React.useMemo(() => {
-    if (!applications) return { total: 0, pending: 0, accepted: 0, rejected: 0 }
+    if (!applications) return { total: 0, pending: 0, approved: 0, denied: 0 }
     return {
       total: applications.length,
       pending: applications.filter((a) => a.status === "pending").length,
@@ -200,10 +201,10 @@ export default function ApplicationsPage() {
                     <p>
                       <strong>Applied:</strong> {format(new Date(application.appliedAt), "PPP")}
                     </p>
-                    {application.respondedAt && (
+                    {application.reviewedAt && (
                       <p>
-                        <strong>Responded:</strong>{" "}
-                        {format(new Date(application.respondedAt), "PPP")}
+                        <strong>Reviewed:</strong>{" "}
+                        {format(new Date(application.reviewedAt), "PPP")}
                       </p>
                     )}
                   </div>

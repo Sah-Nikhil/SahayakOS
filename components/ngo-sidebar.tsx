@@ -25,7 +25,7 @@ import {
 type NgoWithOpportunities = PublicNgoWithOpportunities;
 
 type OpportunityStatus = "open" | "filled" | "closed";
-type OpportunityApplicationStatus = "pending" | "approved" | "denied";
+type OpportunityApplicationStatus = "pending" | "accepted" | "rejected";
 const volunteerOpportunityStatuses: OpportunityStatus[] = ["open", "filled"];
 
 const getLogoInitials = (name: string) => {
@@ -98,8 +98,8 @@ function OpportunityCard({
   const isApplyDisabled = !canApply || opportunity.status !== "open" || Boolean(applicationStatus);
   const applicationLabel: Record<OpportunityApplicationStatus, string> = {
     pending: "Application pending",
-    approved: "Approved by NGO",
-    denied: "Denied by NGO",
+    accepted: "Accepted by NGO",
+    rejected: "Rejected by NGO",
   };
 
   return (

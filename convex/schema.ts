@@ -21,8 +21,8 @@ export const opportunityStatusValidator = v.union(
 
 export const opportunityApplicationStatusValidator = v.union(
   v.literal("pending"),
-  v.literal("approved"),
-  v.literal("denied"),
+  v.literal("accepted"),
+  v.literal("rejected"),
 );
 
 export const opportunityLocationTypeValidator = v.union(
@@ -180,7 +180,7 @@ export default defineSchema({
     ngoId: v.id("ngos"),
     volunteerId: v.id("volunteers"),
     volunteerAccountId: v.id("volunteerAccounts"),
-    coverLetter: v.string(),
+    coverLetter: v.optional(v.string()),
     status: opportunityApplicationStatusValidator,
     appliedAt: v.number(),
     reviewedAt: v.optional(v.number()),
