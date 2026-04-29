@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SingleSelect, type SingleSelectOption } from "@/components/ui/single-select";
+import { ApplyModal } from "@/components/apply-modal";
 import { cn } from "@/lib/utils";
 import {
   ChevronLeft,
@@ -18,12 +19,13 @@ import {
   MapPin,
   Search,
   User,
+  Briefcase,
 } from "lucide-react";
 
 type NgoWithOpportunities = PublicNgoWithOpportunities;
 
 type OpportunityStatus = "open" | "filled" | "closed";
-type OpportunityApplicationStatus = "pending" | "approved" | "denied";
+type OpportunityApplicationStatus = "pending" | "accepted" | "rejected";
 const volunteerOpportunityStatuses: OpportunityStatus[] = ["open", "filled"];
 
 const getLogoInitials = (name: string) => {
@@ -83,23 +85,21 @@ function OpportunityCard({
   opportunity,
   applicationStatus,
   canApply,
-  isApplying,
-  onApply,
   className,
+  onApply,
 }: {
   opportunity: Doc<"opportunities">;
   applicationStatus?: OpportunityApplicationStatus;
   canApply: boolean;
-  isApplying: boolean;
-  onApply: (opportunity: Doc<"opportunities">) => void;
   className?: string;
+  onApply: (opportunityId: string, title: string, location: string) => void;
 }) {
   const isFilled = opportunity.status === "filled";
   const isApplyDisabled = !canApply || opportunity.status !== "open" || Boolean(applicationStatus);
   const applicationLabel: Record<OpportunityApplicationStatus, string> = {
     pending: "Application pending",
-    approved: "Approved by NGO",
-    denied: "Denied by NGO",
+    accepted: "Accepted by NGO",
+    rejected: "Rejected by NGO",
   };
 
   return (
@@ -123,8 +123,17 @@ function OpportunityCard({
         </div>
         <button
           type="button"
-          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 hover:text-foreground"
-          aria-label={`Open ${opportunity.title}`}
+          onClick={() => {
+            if (!canApply) {
+              window.location.assign("/profile");
+            } else {
+              onApply(opportunity._id, opportunity.title, opportunity.location.city);
+            }
+          }}
+          disabled={isApplyDisabled}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label={isFilled ? `${opportunity.title} (Filled)` : !canApply ? "Complete profile to apply" : `Apply to ${opportunity.title}`}
+          title={isFilled ? "This opportunity has been filled" : !canApply ? "Complete profile to apply" : "Apply to this opportunity"}
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </button>
@@ -166,28 +175,6 @@ function OpportunityCard({
         ) : null}
       </div>
 
-      <div className="mt-4">
-        {!canApply ? (
-          <Link href="/profile" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
-            Complete profile to apply
-          </Link>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            disabled={isApplyDisabled || isApplying}
-            onClick={() => onApply(opportunity)}
-          >
-            {isApplying
-              ? "Applying..."
-              : applicationStatus
-                ? applicationLabel[applicationStatus]
-                : opportunity.status !== "open"
-                  ? "Role filled"
-                  : "Apply to this role"}
-          </Button>
-        )}
-      </div>
     </article>
   );
 }
@@ -219,9 +206,6 @@ export function NGOSidebar({
   onSelectedNgoIdChange,
 }: NGOSidebarProps) {
   const [selectedRole, setSelectedRole] = useState("all");
-  const [pendingOpportunityId, setPendingOpportunityId] = useState<Id<"opportunities"> | null>(null);
-  const [applyFeedback, setApplyFeedback] = useState<string | null>(null);
-  const [applyError, setApplyError] = useState<string | null>(null);
   const ngosWithOpportunities = useQuery(api.queries.getNGOsWithOpportunities, {
     city: cityName,
     taskType: selectedRole === "all" ? undefined : selectedRole,
@@ -234,6 +218,31 @@ export function NGOSidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const isExternallyControlled = externallySelectedNgoId !== undefined;
   const selectedNgoId = isExternallyControlled ? externallySelectedNgoId : internalSelectedNgoId;
+
+  const [applyModalState, setApplyModalState] = useState<{
+    isOpen: boolean;
+    opportunityId: string | null;
+    title?: string;
+    location?: string;
+  }>({
+    isOpen: false,
+    opportunityId: null,
+  });
+
+  const handleOpenApplyModal = (opportunityId: string, title: string, location: string) => {
+    setApplyModalState({
+      isOpen: true,
+      opportunityId,
+      title,
+      location,
+    });
+  };
+
+  const handleCloseApplyModal = () => {
+    setApplyModalState((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  const canApply = volunteerContext !== undefined && volunteerContext !== null;
 
   const ngos = useMemo<NgoWithOpportunities[]>(() => ngosWithOpportunities ?? [], [ngosWithOpportunities]);
 
@@ -261,34 +270,6 @@ export function NGOSidebar({
   );
 
   const isLoading = ngosWithOpportunities === undefined;
-  const canApply = Boolean(volunteerContext?.volunteer);
-  const applicationsByOpportunityId = useMemo(() => {
-    const byOpportunity = new Map<Id<"opportunities">, OpportunityApplicationStatus>();
-    for (const application of myApplications ?? []) {
-      byOpportunity.set(application.opportunityId, application.status);
-    }
-    return byOpportunity;
-  }, [myApplications]);
-
-  const handleApply = async (opportunity: Doc<"opportunities">) => {
-    setApplyError(null);
-    setApplyFeedback(null);
-    setPendingOpportunityId(opportunity._id);
-    try {
-      const result = await applyToOpportunity({ opportunityId: opportunity._id });
-      setApplyFeedback(
-        result.created
-          ? `Application sent for "${opportunity.title}".`
-          : `You already applied for "${opportunity.title}".`,
-      );
-    } catch (error) {
-      setApplyError(
-        error instanceof Error ? error.message : "Unable to submit your application right now.",
-      );
-    } finally {
-      setPendingOpportunityId((current) => (current === opportunity._id ? null : current));
-    }
-  };
 
   return (
     <aside
@@ -369,8 +350,6 @@ export function NGOSidebar({
               Complete your volunteer profile before applying to opportunities.
             </p>
           ) : null}
-          {applyFeedback ? <p className="mt-3 text-xs text-primary">{applyFeedback}</p> : null}
-          {applyError ? <p className="mt-3 text-xs text-destructive">{applyError}</p> : null}
 
           <div className="mt-3 space-y-3 pb-5">
             {selectedNgo.opportunities.length === 0 ? (
@@ -380,10 +359,9 @@ export function NGOSidebar({
                 <OpportunityCard
                   key={opportunity._id}
                   opportunity={opportunity}
-                  applicationStatus={applicationsByOpportunityId.get(opportunity._id)}
                   canApply={canApply}
-                  isApplying={pendingOpportunityId === opportunity._id}
-                  onApply={handleApply}
+                  onApply={handleOpenApplyModal}
+                  applicationStatus={myApplications?.find(a => a.opportunityId === opportunity._id)?.status}
                   className={cn(
                     "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300",
                     index > 0 ? "motion-safe:delay-75" : "",
@@ -403,13 +381,23 @@ export function NGOSidebar({
               <h2 className="text-3xl font-bold tracking-tight text-foreground">NGOs</h2>
               <p className="mt-1.5 text-sm text-muted-foreground">Click on an NGO to view opportunities</p>
             </div>
-            <Link
-              href="/profile"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card/40 text-muted-foreground transition-all duration-200 hover:scale-[1.03] hover:border-primary/30 hover:text-foreground active:scale-[0.97]"
-              aria-label="Open profile"
-            >
-              <User className="h-4 w-4" />
-            </Link>
+            <div className="flex gap-2">
+              <Link
+                href="/applications"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card/40 text-muted-foreground transition-all duration-200 hover:scale-[1.03] hover:border-primary/30 hover:text-foreground active:scale-[0.97]"
+                aria-label="View my applications"
+                title="View my applications"
+              >
+                <Briefcase className="h-4 w-4" />
+              </Link>
+              <Link
+                href="/profile"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card/40 text-muted-foreground transition-all duration-200 hover:scale-[1.03] hover:border-primary/30 hover:text-foreground active:scale-[0.97]"
+                aria-label="Open profile"
+              >
+                <User className="h-4 w-4" />
+              </Link>
+            </div>
           </div>
 
           <div className="space-y-3 border-y border-border/50 px-5 py-4">
@@ -498,6 +486,13 @@ export function NGOSidebar({
           </div>
         </div>
       )}
+      <ApplyModal
+        isOpen={applyModalState.isOpen}
+        onClose={handleCloseApplyModal}
+        opportunityId={applyModalState.opportunityId || ""}
+        opportunityTitle={applyModalState.title}
+        opportunityLocation={applyModalState.location}
+      />
     </aside>
   );
 }

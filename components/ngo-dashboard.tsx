@@ -11,6 +11,11 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { SingleSelect } from "@/components/ui/single-select";
+import {
+  DraftOpportunityWithAi,
+  type OpportunityDraft,
+} from "@/components/draft-opportunity-with-ai";
+import { SmartMatchButton } from "@/components/smart-match-button";
 import { getCityMapConfigsFromEnv } from "@/lib/city-maps";
 import { DAY_OPTIONS, SKILL_OPTIONS, type DayOptionValue } from "@/lib/form-options";
 import {
@@ -78,6 +83,12 @@ const locationTypeOptions = [
   { label: "Field", value: "field" },
   { label: "Remote", value: "remote" },
 ];
+
+const aiUrgencyToFormUrgency: Record<OpportunityDraft["urgency"], OpportunityForm["urgency"]> = {
+  Low: "low",
+  Medium: "medium",
+  High: "high",
+};
 
 const normalizeSkill = (value: string) => value.trim().toLowerCase();
 
@@ -154,6 +165,22 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
 
   const handlePriorityChange = (nextValue: SkillPriorityEntry[]) => {
     setForm((prev) => ({ ...prev, skillPriorityMatrix: nextValue }));
+  };
+
+  const handleDraftReady = (draft: OpportunityDraft) => {
+    const requiredSkills = draft.requiredSkills
+      .map((skill) => skill.trim())
+      .filter((skill) => skill.length > 0);
+
+    setForm((prev) => ({
+      ...prev,
+      title: draft.title.trim(),
+      description: draft.description.trim(),
+      taskType: draft.taskType.trim(),
+      urgency: aiUrgencyToFormUrgency[draft.urgency],
+      requiredSkills,
+      skillPriorityMatrix: syncSkillPriorityMatrix(requiredSkills, prev.skillPriorityMatrix),
+    }));
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -306,7 +333,7 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
 
   const handleReviewOpportunityApplication = async (
     applicationId: Id<"opportunityApplications">,
-    status: "approved" | "denied",
+    status: "accepted" | "rejected",
   ) => {
     setError(null);
     setPendingReviewApplicationId(applicationId);
@@ -412,13 +439,19 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
                                         Skills: {application.volunteer.skills.join(", ")}
                                       </p>
                                     ) : null}
+                                    {application.coverLetter ? (
+                                      <div className="mt-2 text-sm text-foreground bg-muted p-2 rounded-md max-w-lg">
+                                        <p className="font-semibold text-xs text-muted-foreground uppercase mb-1">Cover Letter</p>
+                                        <p className="whitespace-pre-wrap">{application.coverLetter}</p>
+                                      </div>
+                                    ) : null}
                                   </div>
                                   <div className="flex flex-col gap-2">
                                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                                       {application.status}
                                     </p>
                                     <div className="flex gap-2">
-                                      {(["approved", "denied"] as const).map((status) => (
+                                      {(["accepted", "rejected"] as const).map((status) => (
                                         <Button
                                           key={status}
                                           type="button"
@@ -441,6 +474,7 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
                         </div>
                       </div>
                       <div className="flex flex-col gap-2">
+                        <SmartMatchButton opportunityId={opportunity._id} />
                         {(["open", "filled", "closed"] as const).map((status) => (
                           <Button
                             key={status}
@@ -483,6 +517,8 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
           <CardContent>
             <form className="space-y-4" onSubmit={handleSubmit}>
               <FieldGroup>
+                <DraftOpportunityWithAi onDraftReady={handleDraftReady} />
+
                 <Field>
                   <FieldLabel htmlFor="title">Title</FieldLabel>
                   <Input id="title" value={form.title} onChange={handleChange} required />

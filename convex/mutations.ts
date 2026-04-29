@@ -126,8 +126,8 @@ const normalizeOpportunityWriteInput = (args: OpportunityWriteInput) => {
 };
 
 const opportunityApplicationReviewStatusValidator = v.union(
-  v.literal("approved"),
-  v.literal("denied"),
+  v.literal("accepted"),
+  v.literal("rejected"),
 );
 
 const requireOwnerIdentity = async (ctx: MutationCtx) => {
@@ -349,6 +349,7 @@ export const updateOpportunityStatus = mutation({
 export const applyToOpportunity = mutation({
   args: {
     opportunityId: v.id("opportunities"),
+    coverLetter: v.string(),
   },
   handler: async (ctx, args) => {
     const { account, volunteer } = await requireCurrentVolunteerProfile(ctx);
@@ -381,6 +382,7 @@ export const applyToOpportunity = mutation({
       ngoId: opportunity.ngoId,
       volunteerId: volunteer._id,
       volunteerAccountId: account._id,
+      coverLetter: args.coverLetter.trim(),
       status: "pending",
       appliedAt: Date.now(),
     });
@@ -459,3 +461,4 @@ export const deleteOpportunity = mutation({
     return args.opportunityId;
   },
 });
+

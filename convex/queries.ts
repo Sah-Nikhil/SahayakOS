@@ -222,6 +222,29 @@ export const getOpportunitiesByNgoId = query({
   },
 });
 
+export const getOpportunityById = query({
+  args: {
+    opportunityId: v.id("opportunities"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.opportunityId);
+  },
+});
+
+const isVolunteerCurrentlyAvailable = (volunteer: Doc<"volunteers">) => {
+  const availability = volunteer.availability;
+  if (!availability) return false;
+  return availability.days.some((day: any) => day.enabled);
+};
+
+export const getAvailableVolunteersForMatching = query({
+  args: {},
+  handler: async (ctx) => {
+    const volunteers = await ctx.db.query("volunteers").take(300);
+    return volunteers.filter((volunteer) => isVolunteerCurrentlyAvailable(volunteer));
+  },
+});
+
 export const getOpportunitiesByCity = query({
   args: {
     city: v.string(),
@@ -290,15 +313,19 @@ export const getMyOpportunityApplications = query({
       .withIndex("by_volunteer", (q) => q.eq("volunteerId", volunteerContext.volunteer._id))
       .take(500);
 
-    return applications
-      .sort((a, b) => b.appliedAt - a.appliedAt)
-      .map((application) => ({
-        _id: application._id,
-        opportunityId: application.opportunityId,
-        status: application.status,
-        appliedAt: application.appliedAt,
-        reviewedAt: application.reviewedAt,
-      }));
+    const enriched = await Promise.all(
+      applications.map(async (app) => {
+        const opportunity = await ctx.db.get(app.opportunityId);
+        const ngo = opportunity ? await ctx.db.get(opportunity.ngoId) : null;
+        return {
+          ...app,
+          opportunity,
+          ngo,
+        };
+      }),
+    );
+
+    return enriched.sort((a, b) => b.appliedAt - a.appliedAt);
   },
 });
 
@@ -341,6 +368,7 @@ export const getOpportunityApplicationsForOwnedNgo = query({
           status: application.status,
           appliedAt: application.appliedAt,
           reviewedAt: application.reviewedAt,
+          coverLetter: application.coverLetter,
           opportunity: {
             _id: opportunity._id,
             title: opportunity.title,
@@ -362,8 +390,8 @@ export const getOpportunityApplicationsForOwnedNgo = query({
 
     const statusPriority: Record<Doc<"opportunityApplications">["status"], number> = {
       pending: 0,
-      approved: 1,
-      denied: 2,
+      accepted: 1,
+      rejected: 2,
     };
 
     return hydratedApplications
