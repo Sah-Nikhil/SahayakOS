@@ -30,6 +30,7 @@ const DEFAULT_ZOOM_BREAKPOINTS = {
 const DEFAULT_MIN_ZOOM_FLOOR = 5;
 const DEFAULT_MIN_ZOOM_OFFSET = 4;
 const DEFAULT_MAX_ZOOM = 19;
+const MARKER_FOCUS_ZOOM_STEPS = 2;
 
 export type CityMapMarker = {
   ngoId: Id<"ngos">;
@@ -89,6 +90,12 @@ const getMinimumZoom = (map: LeafletMap, view?: CityMapViewConfig) => {
 
   const initialZoom = getInitialZoom(map, view?.initialZoom);
   return Math.max(DEFAULT_MIN_ZOOM_FLOOR, Math.floor(initialZoom - DEFAULT_MIN_ZOOM_OFFSET));
+};
+
+const getMarkerFocusZoom = (map: LeafletMap, view?: CityMapViewConfig) => {
+  const baselineZoom = Math.max(map.getZoom(), getInitialZoom(map, view?.initialZoom));
+  const minZoom = map.getMinZoom();
+  return Math.min(DEFAULT_MAX_ZOOM, Math.max(minZoom, baselineZoom + ZOOM_STEP * MARKER_FOCUS_ZOOM_STEPS));
 };
 
 export function CityMap({
@@ -209,6 +216,10 @@ export function CityMap({
             className: "rounded-lg border-0 bg-background/95 px-2 py-1 text-xs font-semibold shadow-sm backdrop-blur-sm",
           })
           .on("click", () => {
+            map.flyTo([marker.lat, marker.lng], getMarkerFocusZoom(map, view), {
+              animate: true,
+              duration: 0.6,
+            });
             if (onMarkerClick) {
               onMarkerClick(marker.ngoId);
             }
@@ -216,7 +227,7 @@ export function CityMap({
           .addTo(layer);
       }
     })();
-  }, [mapData, onMarkerClick]);
+  }, [mapData, onMarkerClick, view]);
 
   return (
     <section

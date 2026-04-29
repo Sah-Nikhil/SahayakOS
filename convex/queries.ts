@@ -13,14 +13,6 @@ const mapFilterArgs = {
 
 const normalizeSkill = (value: string) => value.trim().toLowerCase();
 
-const isVolunteerCurrentlyAvailable = (volunteer: Doc<"volunteers">) => {
-  if (volunteer.availability.mode === "slots") {
-    return volunteer.availability.days.some((day) => day.enabled && day.slots.length > 0);
-  }
-
-  return volunteer.availability.days.some((day) => day.enabled && day.hours > 0);
-};
-
 export type PublicNgoWithOpportunities = Pick<
   Doc<"ngos">,
   "_id" | "name" | "description" | "hqLocation" | "focusAreas"
@@ -76,7 +68,7 @@ const filterOpportunities = (
 const getNgoRowsFromOpportunities = async (
   ctx: QueryCtx,
   opportunities: Doc<"opportunities">[],
-) => {
+): Promise<PublicNgoWithOpportunities[]> => {
   const ngoIds = [...new Set(opportunities.map((opportunity) => opportunity.ngoId))];
   const ngos = await Promise.all(ngoIds.map((ngoId) => ctx.db.get(ngoId)));
   const ngoOpportunities = new Map<Doc<"ngos">["_id"], Doc<"opportunities">[]>();
@@ -97,7 +89,11 @@ const getNgoRowsFromOpportunities = async (
 
     return [
       {
-        ...ngo,
+        _id: ngo._id,
+        name: ngo.name,
+        description: ngo.description,
+        hqLocation: ngo.hqLocation,
+        focusAreas: ngo.focusAreas,
         opportunities: ngoOpportunities.get(ngo._id) ?? [],
       },
     ];
@@ -113,8 +109,8 @@ const getNgosWithFilteredOpportunities = async (
     taskType?: string;
     statuses?: Array<"open" | "filled" | "closed">;
   },
-) => {
-  let ngos;
+): Promise<PublicNgoWithOpportunities[]> => {
+  let ngos: Doc<"ngos">[];
   if (filters.city) {
     const opportunities = await ctx.db
       .query("opportunities")
@@ -138,7 +134,11 @@ const getNgosWithFilteredOpportunities = async (
 
       const filteredOpportunities = filterOpportunities(opportunities, filters);
       return {
-        ...ngo,
+        _id: ngo._id,
+        name: ngo.name,
+        description: ngo.description,
+        hqLocation: ngo.hqLocation,
+        focusAreas: ngo.focusAreas,
         opportunities: filteredOpportunities,
       };
     }),
@@ -147,6 +147,35 @@ const getNgosWithFilteredOpportunities = async (
   return includeEmptyNgos
     ? ngoRows
     : ngoRows.filter((ngo) => ngo.opportunities.length > 0);
+};
+
+const getCurrentVolunteerContext = async (ctx: QueryCtx) => {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    return null;
+  }
+
+  const account = await ctx.db
+    .query("volunteerAccounts")
+    .withIndex("by_tokenIdentifier", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+    .unique();
+
+  if (!account) {
+    return null;
+  }
+
+  const volunteer =
+    (account.volunteerId ? await ctx.db.get(account.volunteerId) : null) ??
+    (await ctx.db
+      .query("volunteers")
+      .withIndex("by_volunteerAccountId", (q) => q.eq("volunteerAccountId", account._id))
+      .unique());
+
+  if (!volunteer) {
+    return null;
+  }
+
+  return { account, volunteer };
 };
 
 export const getNGOsWithOpportunities = query({
@@ -265,31 +294,18 @@ export const getMapData = query({
   },
 });
 
-export const getMyApplications = query({
+export const getMyOpportunityApplications = query({
   args: {},
   handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      return [];
-    }
-
-    const volunteerAccount = await ctx.db
-      .query("volunteerAccounts")
-      .withIndex("by_tokenIdentifier", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-
-    if (!volunteerAccount) {
+    const volunteerContext = await getCurrentVolunteerContext(ctx);
+    if (!volunteerContext) {
       return [];
     }
 
     const applications = await ctx.db
-      .query("volunteerApplications")
-      .withIndex("by_volunteer", (q) =>
-        q.eq("volunteerAccountId", volunteerAccount._id),
-      )
-      .take(200);
+      .query("opportunityApplications")
+      .withIndex("by_volunteer", (q) => q.eq("volunteerId", volunteerContext.volunteer._id))
+      .take(500);
 
     const enriched = await Promise.all(
       applications.map(async (app) => {
@@ -307,53 +323,79 @@ export const getMyApplications = query({
   },
 });
 
-export const getApplicationsByOpportunity = query({
-  args: {
-    opportunityId: v.id("opportunities"),
-  },
-  handler: async (ctx, args) => {
-    const applications = await ctx.db
-      .query("volunteerApplications")
-      .withIndex("by_opportunity", (q) =>
-        q.eq("opportunityId", args.opportunityId),
+export const getOpportunityApplicationsForOwnedNgo = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return [];
+    }
+
+    const ngo = await ctx.db
+      .query("ngos")
+      .withIndex("by_ownerTokenIdentifier", (q) =>
+        q.eq("ownerTokenIdentifier", identity.tokenIdentifier),
       )
+      .unique();
+
+    if (!ngo) {
+      return [];
+    }
+
+    const applications = await ctx.db
+      .query("opportunityApplications")
+      .withIndex("by_ngo", (q) => q.eq("ngoId", ngo._id))
       .take(500);
 
-    const enriched = await Promise.all(
-      applications.map(async (app) => {
-        const volunteerAccount = await ctx.db.get(app.volunteerAccountId);
-        const volunteer = volunteerAccount?.volunteerId
-          ? await ctx.db.get(volunteerAccount.volunteerId)
-          : null;
+    const hydratedApplications = await Promise.all(
+      applications.map(async (application) => {
+        const volunteer = await ctx.db.get(application.volunteerId);
+        const opportunity = await ctx.db.get(application.opportunityId);
+
+        if (!volunteer || !opportunity) {
+          return null;
+        }
+
         return {
-          ...app,
-          volunteer,
-          volunteerAccount,
+          _id: application._id,
+          opportunityId: application.opportunityId,
+          status: application.status,
+          appliedAt: application.appliedAt,
+          reviewedAt: application.reviewedAt,
+          coverLetter: application.coverLetter,
+          opportunity: {
+            _id: opportunity._id,
+            title: opportunity.title,
+            status: opportunity.status,
+            urgency: opportunity.urgency,
+            taskType: opportunity.taskType,
+            location: opportunity.location,
+          },
+          volunteer: {
+            _id: volunteer._id,
+            name: volunteer.name,
+            location: volunteer.location,
+            skills: volunteer.skills,
+            contactDetails: volunteer.contactDetails,
+          },
         };
       }),
     );
 
-    return enriched.sort((a, b) => b.appliedAt - a.appliedAt);
-  },
-});
-
-export const getApplicationStatistics = query({
-  args: {
-    opportunityId: v.id("opportunities"),
-  },
-  handler: async (ctx, args) => {
-    const applications = await ctx.db
-      .query("volunteerApplications")
-      .withIndex("by_opportunity", (q) =>
-        q.eq("opportunityId", args.opportunityId),
-      )
-      .take(500);
-
-    return {
-      total: applications.length,
-      pending: applications.filter((a) => a.status === "pending").length,
-      accepted: applications.filter((a) => a.status === "accepted").length,
-      rejected: applications.filter((a) => a.status === "rejected").length,
+    const statusPriority: Record<Doc<"opportunityApplications">["status"], number> = {
+      pending: 0,
+      approved: 1,
+      denied: 2,
     };
+
+    return hydratedApplications
+      .flatMap((application) => (application ? [application] : []))
+      .sort((a, b) => {
+        const byStatus = statusPriority[a.status] - statusPriority[b.status];
+        if (byStatus !== 0) {
+          return byStatus;
+        }
+        return b.appliedAt - a.appliedAt;
+      });
   },
 });

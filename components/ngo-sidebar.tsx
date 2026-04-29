@@ -2,17 +2,18 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import type { PublicNgoWithOpportunities } from "@/convex/queries";
 import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SingleSelect, type SingleSelectOption } from "@/components/ui/single-select";
 import { Button } from "@/components/ui/button";
 import { ApplyModal } from "@/components/apply-modal";
 import { cn } from "@/lib/utils";
 import {
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -22,11 +23,10 @@ import {
   Briefcase,
 } from "lucide-react";
 
-type NgoWithOpportunities = Doc<"ngos"> & {
-  opportunities: Doc<"opportunities">[];
-};
+type NgoWithOpportunities = PublicNgoWithOpportunities;
 
 type OpportunityStatus = "open" | "filled" | "closed";
+type OpportunityApplicationStatus = "pending" | "approved" | "denied";
 const volunteerOpportunityStatuses: OpportunityStatus[] = ["open", "filled"];
 
 const getLogoInitials = (name: string) => {
@@ -84,14 +84,28 @@ const locationModeLabel = (type: string) => {
 
 function OpportunityCard({
   opportunity,
+  applicationStatus,
+  canApply,
+  isApplying,
+  onApply,
   className,
   onApply,
 }: {
   opportunity: Doc<"opportunities">;
+  applicationStatus?: OpportunityApplicationStatus;
+  canApply: boolean;
+  isApplying: boolean;
+  onApply: (opportunity: Doc<"opportunities">) => void;
   className?: string;
   onApply?: (opportunityId: string, title: string, location: string) => void;
 }) {
   const isFilled = opportunity.status === "filled";
+  const isApplyDisabled = !canApply || opportunity.status !== "open" || Boolean(applicationStatus);
+  const applicationLabel: Record<OpportunityApplicationStatus, string> = {
+    pending: "Application pending",
+    approved: "Approved by NGO",
+    denied: "Denied by NGO",
+  };
 
   return (
     <article
@@ -159,6 +173,29 @@ function OpportunityCard({
           <span className="text-xs text-muted-foreground">+{opportunity.requiredSkills.length - 4} more</span>
         ) : null}
       </div>
+
+      <div className="mt-4">
+        {!canApply ? (
+          <Link href="/profile" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
+            Complete profile to apply
+          </Link>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            disabled={isApplyDisabled || isApplying}
+            onClick={() => onApply(opportunity)}
+          >
+            {isApplying
+              ? "Applying..."
+              : applicationStatus
+                ? applicationLabel[applicationStatus]
+                : opportunity.status !== "open"
+                  ? "Role filled"
+                  : "Apply to this role"}
+          </Button>
+        )}
+      </div>
     </article>
   );
 }
@@ -179,25 +216,38 @@ const ROLE_OPTIONS: SingleSelectOption[] = [
 type NGOSidebarProps = {
   cityName?: string;
   className?: string;
+  selectedNgoId?: Id<"ngos"> | null;
+  onSelectedNgoIdChange?: (ngoId: Id<"ngos"> | null) => void;
 };
 
-export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
+export function NGOSidebar({
+  cityName,
+  className,
+  selectedNgoId: externallySelectedNgoId,
+  onSelectedNgoIdChange,
+}: NGOSidebarProps) {
   const [selectedRole, setSelectedRole] = useState("all");
-  const [applyModalState, setApplyModalState] = useState<{
-    isOpen: boolean;
-    opportunityId?: string;
-    title?: string;
-    location?: string;
-  }>({ isOpen: false });
   const ngosWithOpportunities = useQuery(api.queries.getNGOsWithOpportunities, {
     city: cityName,
     taskType: selectedRole === "all" ? undefined : selectedRole,
     statuses: volunteerOpportunityStatuses,
   });
-  const [selectedNgoId, setSelectedNgoId] = useState<Id<"ngos"> | null>(null);
+  const volunteerContext = useQuery(api.volunteerAccounts.getCurrentVolunteerContext);
+  const myApplications = useQuery(api.queries.getMyOpportunityApplications);
+  const applyToOpportunity = useMutation(api.mutations.applyToOpportunity);
+  const [internalSelectedNgoId, setInternalSelectedNgoId] = useState<Id<"ngos"> | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const isExternallyControlled = externallySelectedNgoId !== undefined;
+  const selectedNgoId = isExternallyControlled ? externallySelectedNgoId : internalSelectedNgoId;
 
-  const ngos: NgoWithOpportunities[] = ngosWithOpportunities ?? [];
+  const ngos = useMemo<NgoWithOpportunities[]>(() => ngosWithOpportunities ?? [], [ngosWithOpportunities]);
+
+  const handleSelectedNgoIdChange = (ngoId: Id<"ngos"> | null) => {
+    if (!isExternallyControlled) {
+      setInternalSelectedNgoId(ngoId);
+    }
+    onSelectedNgoIdChange?.(ngoId);
+  };
 
   const filteredNgos = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -217,14 +267,6 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
 
   const isLoading = ngosWithOpportunities === undefined;
 
-  const handleApply = (opportunityId: string, title: string, location: string) => {
-    setApplyModalState({ isOpen: true, opportunityId, title, location });
-  };
-
-  const handleCloseApplyModal = () => {
-    setApplyModalState({ isOpen: false });
-  };
-
   return (
     <aside
       className={cn(
@@ -240,7 +282,7 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
         >
           <button
             type="button"
-            onClick={() => setSelectedNgoId(null)}
+            onClick={() => handleSelectedNgoIdChange(null)}
             className="inline-flex h-10 w-fit items-center gap-2 rounded-xl border border-border/60 bg-card/40 px-3 text-sm text-muted-foreground transition-all duration-200 hover:border-primary/30 hover:text-foreground active:scale-[0.98]"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -299,6 +341,14 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
             </span>
           </div>
 
+          {!canApply ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Complete your volunteer profile before applying to opportunities.
+            </p>
+          ) : null}
+          {applyFeedback ? <p className="mt-3 text-xs text-primary">{applyFeedback}</p> : null}
+          {applyError ? <p className="mt-3 text-xs text-destructive">{applyError}</p> : null}
+
           <div className="mt-3 space-y-3 pb-5">
             {selectedNgo.opportunities.length === 0 ? (
               <p className="text-sm text-muted-foreground">No opportunities listed yet.</p>
@@ -307,7 +357,6 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
                 <OpportunityCard
                   key={opportunity._id}
                   opportunity={opportunity}
-                  onApply={handleApply}
                   className={cn(
                     "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300",
                     index > 0 ? "motion-safe:delay-75" : "",
@@ -378,7 +427,7 @@ export function NGOSidebar({ cityName, className }: NGOSidebarProps) {
                 <button
                   key={ngo._id}
                   type="button"
-                  onClick={() => setSelectedNgoId(ngo._id)}
+                  onClick={() => handleSelectedNgoIdChange(ngo._id)}
                   className="group w-full rounded-2xl border border-border/50 bg-card/50 p-4 text-left shadow-[6px_6px_20px] shadow-foreground/3 backdrop-blur-sm transition-[transform,border-color,background-color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card/70 active:scale-[0.995]"
                 >
                   <div className="flex gap-3">

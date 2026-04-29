@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { CityMap } from "@/components/city-map";
 import type { CityMapConfig } from "@/lib/city-maps";
+import type { Id } from "@/convex/_generated/dataModel";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { Button } from "@/components/ui/button";
 import { NGOSidebar } from "@/components/ngo-sidebar";
@@ -16,6 +17,7 @@ const volunteerOpportunityStatuses: Array<"open" | "filled"> = ["open", "filled"
 
 export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
   const [selectedCityName, setSelectedCityName] = useState(cities[0]?.name ?? "");
+  const [selectedNgoId, setSelectedNgoId] = useState<Id<"ngos"> | null>(null);
 
   const selectedCity = useMemo(
     () => cities.find((city) => city.name === selectedCityName) ?? cities[0],
@@ -33,7 +35,10 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
                   <Button
                     key={city.name}
                     variant={city.name === selectedCityName ? "default" : "ghost"}
-                    onClick={() => setSelectedCityName(city.name)}
+                    onClick={() => {
+                      setSelectedCityName(city.name);
+                      setSelectedNgoId(null);
+                    }}
                     className={`rounded-full px-5 text-sm font-medium transition-all ${
                       city.name === selectedCityName
                         ? 'bg-primary text-primary-foreground shadow-sm'
@@ -56,6 +61,7 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
               heightClassName="h-full"
               className="h-full w-full rounded-none border-0"
               opportunityStatuses={volunteerOpportunityStatuses}
+              onMarkerClick={(ngoId) => setSelectedNgoId(ngoId)}
             />
           </>
         ) : (
@@ -68,6 +74,8 @@ export function CityMapDashboard({ cities, error }: CityMapDashboardProps) {
         key={selectedCityName || "no-city"}
         cityName={selectedCityName}
         className="hidden xl:flex"
+        selectedNgoId={selectedNgoId}
+        onSelectedNgoIdChange={setSelectedNgoId}
       />
     </main>
   );

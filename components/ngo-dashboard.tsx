@@ -124,13 +124,31 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
   const cityOptions = cityConfig.cities.map((city) => ({ label: city.name, value: city.name }));
 
   const opportunities = useQuery(api.queries.getOpportunitiesByNgoId, ngoId ? { ngoId } : "skip");
+  const opportunityApplications = useQuery(
+    api.queries.getOpportunityApplicationsForOwnedNgo,
+    ngoId ? {} : "skip",
+  );
   const createOpportunity = useMutation(api.mutations.createOpportunity);
   const updateOpportunityStatus = useMutation(api.mutations.updateOpportunityStatus);
   const deleteOpportunity = useMutation(api.mutations.deleteOpportunity);
+  const reviewOpportunityApplication = useMutation(api.mutations.reviewOpportunityApplication);
   const [form, setForm] = React.useState<OpportunityForm>(emptyOpportunityForm);
   const [isSaving, setIsSaving] = React.useState(false);
   const [pendingDeleteOpportunityId, setPendingDeleteOpportunityId] = React.useState<Id<"opportunities"> | null>(null);
+  const [pendingReviewApplicationId, setPendingReviewApplicationId] = React.useState<Id<"opportunityApplications"> | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const applicationsByOpportunityId = React.useMemo(() => {
+    const grouped = new Map<Id<"opportunities">, NonNullable<typeof opportunityApplications>[number][]>();
+    for (const application of opportunityApplications ?? []) {
+      const existing = grouped.get(application.opportunityId);
+      if (existing) {
+        existing.push(application);
+      } else {
+        grouped.set(application.opportunityId, [application]);
+      }
+    }
+    return grouped;
+  }, [opportunityApplications]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { id, value } = event.target;
@@ -313,6 +331,23 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
     }
   };
 
+  const handleReviewOpportunityApplication = async (
+    applicationId: Id<"opportunityApplications">,
+    status: "approved" | "denied",
+  ) => {
+    setError(null);
+    setPendingReviewApplicationId(applicationId);
+    try {
+      await reviewOpportunityApplication({ applicationId, status });
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error ? submitError.message : "Unable to review this application right now.",
+      );
+    } finally {
+      setPendingReviewApplicationId((current) => (current === applicationId ? null : current));
+    }
+  };
+
   if (isNgoLoading) {
     return (
       <div className={className} {...props}>
@@ -378,6 +413,59 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
                           {opportunity.timeWindow.durationHours} hour
                           {opportunity.timeWindow.durationHours !== 1 ? "s" : ""}
                         </p>
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Applications: {(applicationsByOpportunityId.get(opportunity._id) ?? []).length}
+                          </p>
+                          {(applicationsByOpportunityId.get(opportunity._id) ?? []).length === 0 ? (
+                            <p className="text-xs text-muted-foreground">No volunteers have applied yet.</p>
+                          ) : (
+                            (applicationsByOpportunityId.get(opportunity._id) ?? []).map((application) => (
+                              <div key={application._id} className="rounded-md border p-3">
+                                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                                  <div>
+                                    <p className="text-sm font-medium">{application.volunteer.name}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {application.volunteer.contactDetails.email}
+                                      {application.volunteer.contactDetails.phone
+                                        ? ` • ${application.volunteer.contactDetails.phone}`
+                                        : ""}
+                                    </p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {application.volunteer.location}
+                                    </p>
+                                    {application.volunteer.skills.length > 0 ? (
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        Skills: {application.volunteer.skills.join(", ")}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex flex-col gap-2">
+                                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                      {application.status}
+                                    </p>
+                                    <div className="flex gap-2">
+                                      {(["approved", "denied"] as const).map((status) => (
+                                        <Button
+                                          key={status}
+                                          type="button"
+                                          size="sm"
+                                          variant={application.status === status ? "default" : "outline"}
+                                          onClick={() =>
+                                            void handleReviewOpportunityApplication(application._id, status)
+                                          }
+                                          disabled={pendingReviewApplicationId === application._id}
+                                        >
+                                          {status}
+                                        </Button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-col gap-2">
                         <SmartMatchButton opportunityId={opportunity._id} />
