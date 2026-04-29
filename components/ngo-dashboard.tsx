@@ -439,6 +439,12 @@ export function NgoDashboard({ className, ...props }: React.ComponentProps<"div"
                                         Skills: {application.volunteer.skills.join(", ")}
                                       </p>
                                     ) : null}
+                                    {application.coverLetter ? (
+                                      <div className="mt-2 text-sm text-foreground bg-muted p-2 rounded-md max-w-lg">
+                                        <p className="font-semibold text-xs text-muted-foreground uppercase mb-1">Cover Letter</p>
+                                        <p className="whitespace-pre-wrap">{application.coverLetter}</p>
+                                      </div>
+                                    ) : null}
                                   </div>
                                   <div className="flex flex-col gap-2">
                                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { api } from "@/convex/_generated/api"
-import { useMutation } from "convex/react"
+import { useMutation, useQuery } from "convex/react"
 import type { Id } from "@/convex/_generated/dataModel"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -33,7 +33,27 @@ export function ApplyModal({
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [message, setMessage] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
-  const createApplication = useMutation(api.mutations.createVolunteerApplication)
+  const applyToOpportunity = useMutation(api.mutations.applyToOpportunity)
+  const opportunity = useQuery(api.queries.getOpportunityById, isOpen && opportunityId ? { opportunityId: opportunityId as Id<"opportunities"> } : "skip")
+  const volunteerContext = useQuery(api.volunteerAccounts.getCurrentVolunteerContext)
+
+  const availabilityWarning = React.useMemo(() => {
+    if (!opportunity?.days || opportunity.days.length === 0) return null;
+    const volunteer = volunteerContext?.volunteer;
+    if (!volunteer?.availability) return null;
+
+    const availableDays = new Set(
+      volunteer.availability.days
+        .filter((d: any) => d.enabled)
+        .map((d: any) => d.day)
+    );
+
+    const missingDays = opportunity.days.filter((day: string) => !availableDays.has(day));
+    if (missingDays.length > 0) {
+      return `Warning: Your availability doesn't perfectly align with the required days (${opportunity.days.join(", ")}). You may still apply, but the NGO will see this.`;
+    }
+    return null;
+  }, [opportunity, volunteerContext]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,7 +67,7 @@ export function ApplyModal({
 
     setIsSubmitting(true)
     try {
-      await createApplication({
+      await applyToOpportunity({
         opportunityId: opportunityId as Id<"opportunities">,
         coverLetter,
       })
@@ -102,6 +122,9 @@ export function ApplyModal({
                   Share your motivation and relevant experience (optional but recommended)
                 </FieldDescription>
               </Field>
+              {availabilityWarning ? (
+                <FieldDescription className="text-amber-600 font-medium">{availabilityWarning}</FieldDescription>
+              ) : null}
               {message ? (
                 <FieldDescription className="text-green-600">{message}</FieldDescription>
               ) : null}

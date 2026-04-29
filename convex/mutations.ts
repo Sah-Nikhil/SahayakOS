@@ -350,6 +350,7 @@ export const updateOpportunityStatus = mutation({
 export const applyToOpportunity = mutation({
   args: {
     opportunityId: v.id("opportunities"),
+    coverLetter: v.string(),
   },
   handler: async (ctx, args) => {
     const { account, volunteer } = await requireCurrentVolunteerProfile(ctx);
@@ -382,6 +383,7 @@ export const applyToOpportunity = mutation({
       ngoId: opportunity.ngoId,
       volunteerId: volunteer._id,
       volunteerAccountId: account._id,
+      coverLetter: args.coverLetter.trim(),
       status: "pending",
       appliedAt: Date.now(),
     });
@@ -461,127 +463,7 @@ export const deleteOpportunity = mutation({
   },
 });
 
-export const createVolunteerApplication = mutation({
-  args: {
-    opportunityId: v.id("opportunities"),
-    coverLetter: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated. Please sign in first.");
-    }
 
-    // Get volunteer account
-    const volunteerAccount = await ctx.db
-      .query("volunteerAccounts")
-      .withIndex("by_tokenIdentifier", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-
-    if (!volunteerAccount) {
-      throw new Error("Volunteer account not found.");
-    }
-
-    // Check if opportunity exists
-    const opportunity = await ctx.db.get(args.opportunityId);
-    if (!opportunity) {
-      throw new Error("Opportunity not found.");
-    }
-
-    // Check if already applied
-    const existingApplication = await ctx.db
-      .query("volunteerApplications")
-      .withIndex("by_volunteer_opportunity", (q) =>
-        q.eq("volunteerAccountId", volunteerAccount._id).eq("opportunityId", args.opportunityId),
-      )
-      .unique();
-
-    if (existingApplication) {
-      throw new Error("You have already applied to this opportunity.");
-    }
-
-    return await ctx.db.insert("volunteerApplications", {
-      volunteerAccountId: volunteerAccount._id,
-      opportunityId: args.opportunityId,
-      coverLetter: args.coverLetter.trim(),
-      status: "pending",
-      appliedAt: Date.now(),
-    });
-  },
-});
-
-export const updateApplicationStatus = mutation({
-  args: {
-    applicationId: v.id("volunteerApplications"),
-    status: applicationStatusValidator,
-  },
-  handler: async (ctx, args) => {
-    const identity = await requireOwnerIdentity(ctx);
-
-    const application = await ctx.db.get(args.applicationId);
-    if (!application) {
-      throw new Error("Application not found.");
-    }
-
-    const opportunity = await ctx.db.get(application.opportunityId);
-    if (!opportunity) {
-      throw new Error("Opportunity not found.");
-    }
-
-    const ngo = await ctx.db.get(opportunity.ngoId);
-    if (!ngo) {
-      throw new Error("NGO not found.");
-    }
-
-    if (ngo.ownerTokenIdentifier !== identity.tokenIdentifier) {
-      throw new Error("You do not own this NGO.");
-    }
-
-    await ctx.db.patch(args.applicationId, {
-      status: args.status,
-      respondedAt: Date.now(),
-    });
-
-    return await ctx.db.get(args.applicationId);
-  },
-});
-
-export const deleteVolunteerApplication = mutation({
-  args: {
-    applicationId: v.id("volunteerApplications"),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated. Please sign in first.");
-    }
-
-    const application = await ctx.db.get(args.applicationId);
-    if (!application) {
-      throw new Error("Application not found.");
-    }
-
-    const volunteerAccount = await ctx.db
-      .query("volunteerAccounts")
-      .withIndex("by_tokenIdentifier", (q) =>
-        q.eq("tokenIdentifier", identity.tokenIdentifier),
-      )
-      .unique();
-
-    if (!volunteerAccount || volunteerAccount._id !== application.volunteerAccountId) {
-      throw new Error("You do not own this application.");
-    }
-
-    if (application.status !== "pending") {
-      throw new Error("You can only delete pending applications.");
-    }
-
-    await ctx.db.delete(args.applicationId);
-    return args.applicationId;
-  },
-});
 
 export const upsertOpportunityFromN8n = mutation({
   args: {

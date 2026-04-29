@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SingleSelect, type SingleSelectOption } from "@/components/ui/single-select";
-import { Button } from "@/components/ui/button";
 import { ApplyModal } from "@/components/apply-modal";
 import { cn } from "@/lib/utils";
 import {
@@ -86,18 +85,14 @@ function OpportunityCard({
   opportunity,
   applicationStatus,
   canApply,
-  isApplying,
-  onApply,
   className,
   onApply,
 }: {
   opportunity: Doc<"opportunities">;
   applicationStatus?: OpportunityApplicationStatus;
   canApply: boolean;
-  isApplying: boolean;
-  onApply: (opportunity: Doc<"opportunities">) => void;
   className?: string;
-  onApply?: (opportunityId: string, title: string, location: string) => void;
+  onApply: (opportunityId: string, title: string, location: string) => void;
 }) {
   const isFilled = opportunity.status === "filled";
   const isApplyDisabled = !canApply || opportunity.status !== "open" || Boolean(applicationStatus);
@@ -128,11 +123,17 @@ function OpportunityCard({
         </div>
         <button
           type="button"
-          onClick={() => onApply?.(opportunity._id, opportunity.title, opportunity.location.city)}
-          disabled={isFilled}
+          onClick={() => {
+            if (!canApply) {
+              window.location.assign("/profile");
+            } else {
+              onApply(opportunity._id, opportunity.title, opportunity.location.city);
+            }
+          }}
+          disabled={isApplyDisabled}
           className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors duration-200 hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-label={isFilled ? `${opportunity.title} (Filled)` : `Apply to ${opportunity.title}`}
-          title={isFilled ? "This opportunity has been filled" : "Apply to this opportunity"}
+          aria-label={isFilled ? `${opportunity.title} (Filled)` : !canApply ? "Complete profile to apply" : `Apply to ${opportunity.title}`}
+          title={isFilled ? "This opportunity has been filled" : !canApply ? "Complete profile to apply" : "Apply to this opportunity"}
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </button>
@@ -174,28 +175,6 @@ function OpportunityCard({
         ) : null}
       </div>
 
-      <div className="mt-4">
-        {!canApply ? (
-          <Link href="/profile" className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
-            Complete profile to apply
-          </Link>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            disabled={isApplyDisabled || isApplying}
-            onClick={() => onApply(opportunity)}
-          >
-            {isApplying
-              ? "Applying..."
-              : applicationStatus
-                ? applicationLabel[applicationStatus]
-                : opportunity.status !== "open"
-                  ? "Role filled"
-                  : "Apply to this role"}
-          </Button>
-        )}
-      </div>
     </article>
   );
 }
@@ -239,6 +218,31 @@ export function NGOSidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const isExternallyControlled = externallySelectedNgoId !== undefined;
   const selectedNgoId = isExternallyControlled ? externallySelectedNgoId : internalSelectedNgoId;
+
+  const [applyModalState, setApplyModalState] = useState<{
+    isOpen: boolean;
+    opportunityId: string | null;
+    title?: string;
+    location?: string;
+  }>({
+    isOpen: false,
+    opportunityId: null,
+  });
+
+  const handleOpenApplyModal = (opportunityId: string, title: string, location: string) => {
+    setApplyModalState({
+      isOpen: true,
+      opportunityId,
+      title,
+      location,
+    });
+  };
+
+  const handleCloseApplyModal = () => {
+    setApplyModalState((prev) => ({ ...prev, isOpen: false }));
+  };
+
+  const canApply = volunteerContext !== undefined && volunteerContext !== null;
 
   const ngos = useMemo<NgoWithOpportunities[]>(() => ngosWithOpportunities ?? [], [ngosWithOpportunities]);
 
@@ -346,8 +350,6 @@ export function NGOSidebar({
               Complete your volunteer profile before applying to opportunities.
             </p>
           ) : null}
-          {applyFeedback ? <p className="mt-3 text-xs text-primary">{applyFeedback}</p> : null}
-          {applyError ? <p className="mt-3 text-xs text-destructive">{applyError}</p> : null}
 
           <div className="mt-3 space-y-3 pb-5">
             {selectedNgo.opportunities.length === 0 ? (
@@ -357,6 +359,9 @@ export function NGOSidebar({
                 <OpportunityCard
                   key={opportunity._id}
                   opportunity={opportunity}
+                  canApply={canApply}
+                  onApply={handleOpenApplyModal}
+                  applicationStatus={myApplications?.find(a => a.opportunityId === opportunity._id)?.status}
                   className={cn(
                     "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-300",
                     index > 0 ? "motion-safe:delay-75" : "",
