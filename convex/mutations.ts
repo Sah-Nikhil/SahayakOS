@@ -8,7 +8,6 @@ import {
   opportunityStatusValidator,
   opportunityTimeWindowValidator,
   opportunityUrgencyValidator,
-  applicationStatusValidator,
 } from "./schema";
 
 const normalizeStringArray = (values: string[]) =>

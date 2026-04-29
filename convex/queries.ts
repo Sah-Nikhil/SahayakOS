@@ -231,6 +231,12 @@ export const getOpportunityById = query({
   },
 });
 
+const isVolunteerCurrentlyAvailable = (volunteer: Doc<"volunteers">) => {
+  const availability = volunteer.availability;
+  if (!availability) return false;
+  return availability.days.some((day: any) => day.enabled);
+};
+
 export const getAvailableVolunteersForMatching = query({
   args: {},
   handler: async (ctx) => {
