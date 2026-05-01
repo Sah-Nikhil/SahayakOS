@@ -123,8 +123,7 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-  Start["Visit SahayakOS"] --> Home["Home city map"]
-  Home --> Choice{"User type?"}
+  Start["Visit SahayakOS"] --> Choice{"User type?"}
   Choice -->|Volunteer| VolunteerAuth["Login or\nSignup"]
   Choice -->|NGO| NgoAuth["Login or\nSignup"]
 
