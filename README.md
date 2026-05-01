@@ -160,7 +160,7 @@ flowchart TB
 ### Prerequisites
 
 - Node.js 18+ (or Bun)
-- npm or bun package manager
+- bun or bun package manager
 
 ### Installation
 
@@ -172,8 +172,6 @@ cd ps1
 
 2. Install dependencies:
 ```bash
-npm install
-# or with bun
 bun install
 ```
 
@@ -190,7 +188,7 @@ bun install
 Run the development server:
 
 ```bash
-npm run dev
+bun run dev
 # or
 bun dev
 ```
@@ -201,11 +199,11 @@ The app will auto-reload as you make changes.
 
 ## Available Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm start` - Run production build
-- `npm run lint` - Run ESLint
-- `npm run typecheck` - Validate TypeScript and generate route types
+- `bun run dev` - Start development server
+- `bun run build` - Build for production
+- `bun start` - Run production build
+- `bun run lint` - Run ESLint
+- `bun run typecheck` - Validate TypeScript and generate route types
 
 ## Project Structure
 
@@ -268,8 +266,8 @@ The application uses Clerk for authentication with separate flows for volunteers
 
 ## Development Workflow
 
-- `npm run typecheck` validates TypeScript and generates route types.
-- `npm run lint` checks code quality.
+- `bun run typecheck` validates TypeScript and generates route types.
+- `bun run lint` checks code quality.
 - `convex/schema.ts` defines the backend schema and indexes used by the app.
 
 ## Deployment
