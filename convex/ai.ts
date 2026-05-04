@@ -1,6 +1,6 @@
 "use node";
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import { v } from "convex/values";
 
 import { api } from "./_generated/api";
@@ -26,13 +26,69 @@ type VolunteerMatchesResponse = {
   matches: VolunteerMatchResult[];
 };
 
-const gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const model = gemini.getGenerativeModel({
-  model: "gemini-1.5-flash",
-  generationConfig: {
-    responseMimeType: "application/json",
+const DRAFT_OPPORTUNITY_SCHEMA = {
+  type: Type.OBJECT,
+  required: ["title", "description", "urgency", "requiredSkills", "taskType"],
+  properties: {
+    title: { type: Type.STRING },
+    description: { type: Type.STRING },
+    urgency: { type: Type.STRING, enum: ["Low", "Medium", "High"] },
+    requiredSkills: { type: Type.ARRAY, items: { type: Type.STRING } },
+    taskType: { type: Type.STRING },
   },
+};
+
+const MATCH_VOLUNTEERS_SCHEMA = {
+  type: Type.OBJECT,
+  required: ["matches"],
+  properties: {
+    matches: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        required: ["volunteerId", "name", "matchReason", "score"],
+        properties: {
+          volunteerId: { type: Type.STRING },
+          name: { type: Type.STRING },
+          matchReason: { type: Type.STRING },
+          score: { type: Type.NUMBER },
+        },
+      },
+    },
+  },
+};
+
+const PRIMARY_MODEL = "gemini-flash-lite-latest";
+const FALLBACK_MODEL = "gemini-flash-latest";
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY!,
 });
+
+async function generateWithFallback(prompt: string, responseSchema: any) {
+  const contents = [{ role: "user", parts: [{ text: prompt }] }];
+  const config = {
+    thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+    responseMimeType: "application/json",
+    responseSchema,
+  };
+
+  try {
+    return await ai.models.generateContent({
+      model: PRIMARY_MODEL,
+      config,
+      contents,
+    });
+  } catch (error) {
+    console.error(`Primary model (${PRIMARY_MODEL}) failed:`, error);
+    console.log(`Retrying with fallback model (${FALLBACK_MODEL})...`);
+    return await ai.models.generateContent({
+      model: FALLBACK_MODEL,
+      config,
+      contents,
+    });
+  }
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -126,9 +182,9 @@ export const draftOpportunity = action({
       `Input notes: """${inputNotes}"""`,
     ].join("\n");
 
-    const response = await model.generateContent(prompt);
+    const response = await generateWithFallback(prompt, DRAFT_OPPORTUNITY_SCHEMA);
     return parseStrictJson(
-      response.response.text(),
+      response.text!,
       isOpportunityDraftResult,
       "draftOpportunity response",
     );
@@ -185,9 +241,9 @@ export const matchVolunteersToOpportunity = action({
       `Volunteer profiles: ${JSON.stringify(volunteerProfiles)}`,
     ].join("\n");
 
-    const response = await model.generateContent(prompt);
+    const response = await generateWithFallback(prompt, MATCH_VOLUNTEERS_SCHEMA);
     const parsed = parseStrictJson(
-      response.response.text(),
+      response.text!,
       isVolunteerMatchesResponse,
       "matchVolunteersToOpportunity response",
     );
